@@ -5,33 +5,18 @@ use std::fmt::Debug;
 use std::{path::PathBuf, result::Result};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-    
-    #[wasm_bindgen(js_namespace = console)]
-    fn error(s: &str);
-    
-    #[wasm_bindgen(js_namespace = console)]
-    fn warn(s: &str);
-    
-    #[wasm_bindgen(js_namespace = console)]
-    fn debug(s: &str);
-}
-
 // Initialize tracing for WASM/browser environment
 fn init_tracing() {
-    use tracing;
+    use tracing_web::{MakeWebConsoleWriter, performance_layer};
+    use tracing_subscriber::fmt::format::Pretty;
     use tracing_subscriber::prelude::*;
-    use tracing_web::{MakeConsoleWriter, performance_layer};
     
     let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(false) // No ANSI colors in browser console
-        .with_writer(MakeConsoleWriter); // Route to browser console
-    
-    let perf_layer = performance_layer();
-    
+        .with_ansi(false) // Only partially supported across browsers
+        .without_time()   // std::time is not available in browsers
+        .with_writer(MakeWebConsoleWriter::new()); // write events to the console
+    let perf_layer = performance_layer().with_details_from_fields(Pretty::default());
+
     tracing_subscriber::registry()
         .with(fmt_layer)
         .with(perf_layer)
