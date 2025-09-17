@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 
 // Initialize tracing for WASM/browser environment
 #[wasm_bindgen]
-pub fn init_tracing() -> Result<(), JsValue> {
+pub fn init_tracing() {
     use tracing_web::{MakeWebConsoleWriter, performance_layer};
     use tracing_subscriber::fmt::format::Pretty;
     use tracing_subscriber::prelude::*;
@@ -26,12 +26,12 @@ pub fn init_tracing() -> Result<(), JsValue> {
         Ok(_) => tracing::info!("Tracing initialized successfully"),
         Err(e) => tracing::error!("Failed to initialize tracing: {}", e),
     }
-
-    Ok(())
 }
 
 #[wasm_bindgen]
 pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> {
+    console_error_panic_hook::set_once();
+
     tracing::debug!("Running CLI with input: {:?}", args);
     let credential = AccessTokenCredential::new(token.to_string()).map_err(jsfy)?;
     let client = Client::new(
