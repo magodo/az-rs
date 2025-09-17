@@ -1,7 +1,6 @@
+use crate::azidentityext::access_token_credential::AccessTokenCredential;
 use crate::client::Client;
 use crate::run;
-use azure_core::credentials::Secret;
-use azure_identity::ClientSecretCredential;
 use std::fmt::Debug;
 use std::{path::PathBuf, result::Result};
 use wasm_bindgen::prelude::*;
@@ -13,21 +12,9 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub async fn run_cli(
-    args: Vec<String>,
-    tenant_id: &str,
-    client_id: &str,
-    secret: &str,
-) -> Result<String, JsValue> {
+pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
-    let credential = ClientSecretCredential::new(
-        tenant_id,
-        client_id.to_string(),
-        Secret::new(secret.to_string()),
-        None,
-    )
-    .map_err(jsfy)?;
-
+    let credential = AccessTokenCredential::new(token.to_string()).map_err(jsfy)?;
     let client = Client::new(
         "https://management.azure.com",
         vec!["https://management.azure.com/.default"],
@@ -35,7 +22,6 @@ pub async fn run_cli(
         None,
     )
     .map_err(jsfy)?;
-
     run(PathBuf::new(), &client, args).await.map_err(jsfy)
 }
 

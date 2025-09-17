@@ -3,11 +3,14 @@ name: Build-Page
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
+  # Vite environment variables for Azure authentication
+  VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
+  VITE_AUTHORITY: ${{ secrets.VITE_AUTHORITY }}
+  VITE_REDIRECT_URI: ${{ secrets.VITE_REDIRECT_URI }}
+  VITE_POST_LOGOUT_REDIRECT_URI: ${{ secrets.VITE_POST_LOGOUT_REDIRECT_URI }}
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -30,16 +33,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Dependency
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: www/package-lock.json
+      
+      - name: Install Rust dependencies
         run: cargo install wasm-pack
-      - name: Build
+      
+      - name: Build WASM
         run: RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --features runtime-web
+      
+      - name: Install npm dependencies
+        working-directory: www
+        run: npm ci
+      
+      - name: Build Vite application
+        working-directory: www
+        run: npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'www'
+          path: 'www/dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

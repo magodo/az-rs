@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 pub mod api;
 pub mod arg;
+pub mod azidentityext;
 pub mod client;
 pub mod cmd;
 
