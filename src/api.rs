@@ -26,7 +26,7 @@ impl ApiManager {
             .ok_or(anyhow!("the rp is not specified"))
             .and_then(|rp| {
                 let c = self.read_metadata(rp)?.resolve_command(&raw_input)?;
-                Ok(CommandInvocation::new(&c, matches))
+                Ok(CommandInvocation::new(&c, matches)?)
             })
     }
 }
@@ -40,7 +40,7 @@ mod embedded {
     use rust_embed::RustEmbed;
 
     #[derive(RustEmbed)]
-    #[folder = "metadata/"]
+    #[folder = "metadata/metadata"]
     struct Asset;
 
     impl super::ApiManager {

@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
         None,
     )?;
     let res = run(
-        PathBuf::from_str("./metadata")?,
+        PathBuf::from_str("./metadata/metadata")?,
         &client,
         env::args_os()
             .into_iter()

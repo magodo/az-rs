@@ -1,4 +1,5 @@
-// TODO: This is not a comprehensive definition for the API metadata, just for PoC.
+use std::collections::HashMap;
+
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 
@@ -7,10 +8,9 @@ use crate::arg::CliInput;
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
-    pub plane: Plane,
+    pub help: Option<Help>,
     #[serde(rename = "commandGroups")]
-    pub command_groups: Vec<CommandGroup>,
-    pub resources: Vec<Resource>,
+    pub command_groups: HashMap<String, CommandGroup>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -50,31 +50,34 @@ impl From<Method> for azure_core::http::Method {
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CommandGroup {
-    pub name: String,
-    pub commands: Vec<Command>,
     #[serde(rename = "commandGroups")]
-    pub command_groups: Option<Vec<CommandGroup>>,
+    pub command_groups: Option<HashMap<String, CommandGroup>>,
+    pub commands: Option<HashMap<String, Command>>,
+    pub help: Option<Help>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Command {
-    pub resources: Vec<Resource>,
-    pub name: String,
-    pub version: String,
+    pub help: Option<Help>,
+    pub versions: HashMap<String, VersionCommand>,
+}
+
+#[cfg_attr(test, derive(serde::Serialize))]
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct VersionCommand {
     #[serde(rename = "argGroups")]
     pub arg_groups: Vec<ArgGroup>,
     pub operations: Vec<Operation>,
     pub outputs: Option<Vec<Output>>,
-    pub confirmation: Option<String>,
+    pub resources: Vec<Resource>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Resource {
     pub id: String,
-    pub version: String,
-    pub swagger: String,
+    pub plane: Plane,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -151,11 +154,11 @@ pub struct RequestPathParam {
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct RequestFormat {
-    pub pattern: String,
+    pub pattern: Option<String>,
     #[serde(rename = "maxLength")]
-    pub max_length: i64,
+    pub max_length: Option<i64>,
     #[serde(rename = "minLength")]
-    pub min_length: i64,
+    pub min_length: Option<i64>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -269,24 +272,20 @@ impl Metadata {
         let mut args = args.iter();
         // Iterate over the first rp arg
         args.next();
-
         let mut cg = CommandGroup {
             command_groups: Some(self.command_groups.clone()),
-            ..CommandGroup::default()
+            help: None,
+            commands: None,
         };
 
         while let Some(arg) = args.next() {
             if let Some(v) = cg
                 .command_groups
-                .and_then(|cgs| cgs.iter().find(|cg| cg.name.as_str() == *arg).cloned())
+                .as_ref()
+                .and_then(|cg| cg.get(*arg).cloned())
             {
                 cg = v;
-            } else if let Some(v) = cg
-                .commands
-                .iter()
-                .find(|c| c.name.as_str() == *arg)
-                .cloned()
-            {
+            } else if let Some(v) = cg.commands.as_ref().and_then(|c| c.get(*arg).cloned()) {
                 // Command must be the last positional argument
                 if let Some(arg) = args.next() {
                     return Err(anyhow!("unknown argument {}", arg));
@@ -348,429 +347,433 @@ mod test {
     fn deserialize() -> Result<(), Box<dyn Error>> {
         let input = r#"
 {
-  "plane": "mgmt-plane",
-  "resources": [
-    {
-      "id": "/subscriptions/{}/resourcegroups/{}",
-      "version": "2024-11-01",
-      "swagger": "mgmt-plane/resources/ResourceProviders/Microsoft.Resources/Paths/L3N1YnNjcmlwdGlvbnMve3N1YnNjcmlwdGlvbklkfS9yZXNvdXJjZWdyb3Vwcy97cmVzb3VyY2VHcm91cE5hbWV9/V/MjAyNC0xMS0wMQ=="
-    }
-  ],
-  "commandGroups": [
-    {
-      "name": "group",
-      "commands": [
-        {
-          "name": "show",
-          "version": "2024-11-01",
-          "resources": [
-            {
-              "id": "/subscriptions/{}/resourcegroups/{}",
-              "version": "2024-11-01",
-              "swagger": "mgmt-plane/resources/ResourceProviders/Microsoft.Resources/Paths/L3N1YnNjcmlwdGlvbnMve3N1YnNjcmlwdGlvbklkfS9yZXNvdXJjZWdyb3Vwcy97cmVzb3VyY2VHcm91cE5hbWV9/V/MjAyNC0xMS0wMQ=="
-            }
-          ],
-          "argGroups": [
-            {
-              "name": "",
-              "args": [
+  "help": {
+      "short": "rp"
+  },
+  "commandGroups": {
+    "group": {
+      "commands": {
+        "show": {
+          "help": {
+            "short": "show"
+          },
+          "versions": {
+            "2024-11-01": {
+              "argGroups": [
                 {
-                  "type": "ResourceGroupName",
-                  "var": "$Path.resourceGroupName",
-                  "options": [
-                    "g",
-                    "resource-group"
-                  ],
-                  "required": true,
-                  "idPart": "resource_group"
-                },
-                {
-                  "type": "SubscriptionId",
-                  "var": "$Path.subscriptionId",
-                  "options": [
-                    "subscription"
-                  ],
-                  "required": true,
-                  "idPart": "subscription"
-                }
-              ]
-            }
-          ],
-          "operations": [
-            {
-              "operationId": "ResourceGroups_Get",
-              "http": {
-                "path": "/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}",
-                "request": {
-                  "method": "get",
-                  "path": {
-                    "params": [
-                      {
-                        "type": "string",
-                        "name": "resourceGroupName",
-                        "arg": "$Path.resourceGroupName",
-                        "required": true,
-                        "format": {
-                          "pattern": "^[-\\w\\._\\(\\)]+$",
-                          "maxLength": 90,
-                          "minLength": 1
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "name": "subscriptionId",
-                        "arg": "$Path.subscriptionId",
-                        "required": true
-                      }
-                    ]
-                  },
-                  "query": {
-                    "consts": [
-                      {
-                        "readOnly": true,
-                        "const": true,
-                        "default": {
-                          "value": "2024-11-01"
-                        },
-                        "type": "string",
-                        "name": "api-version",
-                        "required": true
-                      }
-                    ]
-                  }
-                },
-                "responses": [
-                  {
-                    "statusCode": [
-                      200
-                    ],
-                    "body": {
-                      "json": {
-                        "var": "$Instance",
-                        "schema": {
-                          "type": "object",
-                          "props": [
-                            {
-                              "readOnly": true,
-                              "type": "ResourceId",
-                              "name": "id",
-                              "format": {
-                                "template": "/subscriptions/{}/resourcegroups/{}"
-                              }
-                            },
-                            {
-                              "type": "ResourceLocation",
-                              "name": "location",
-                              "required": true
-                            },
-                            {
-                              "type": "string",
-                              "name": "managedBy"
-                            },
-                            {
-                              "readOnly": true,
-                              "type": "string",
-                              "name": "name"
-                            },
-                            {
-                              "type": "object",
-                              "name": "properties",
-                              "props": [
-                                {
-                                  "readOnly": true,
-                                  "type": "string",
-                                  "name": "provisioningState"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "name": "tags",
-                              "additionalProps": {
-                                "item": {
-                                  "type": "string"
-                                }
-                              }
-                            },
-                            {
-                              "readOnly": true,
-                              "type": "string",
-                              "name": "type"
-                            }
-                          ]
-                        }
-                      }
+                  "name": "",
+                  "args": [
+                    {
+                      "type": "ResourceGroupName",
+                      "var": "$Path.resourceGroupName",
+                      "options": [
+                        "g",
+                        "resource-group"
+                      ],
+                      "required": true,
+                      "idPart": "resource_group"
+                    },
+                    {
+                      "type": "SubscriptionId",
+                      "var": "$Path.subscriptionId",
+                      "options": [
+                        "subscription"
+                      ],
+                      "required": true,
+                      "idPart": "subscription"
                     }
-                  },
-                  {
-                    "isError": true,
-                    "body": {
-                      "json": {
-                        "schema": {
-                          "type": "@MgmtErrorFormat"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "outputs": [
-            {
-              "type": "object",
-              "ref": "$Instance",
-              "clientFlatten": true
-            }
-          ]
-        },
-        {
-          "name": "create",
-          "version": "2024-11-01",
-          "resources": [
-            {
-              "id": "/subscriptions/{}/resourcegroups/{}",
-              "version": "2024-11-01",
-              "swagger": "mgmt-plane/resources/ResourceProviders/Microsoft.Resources/Paths/L3N1YnNjcmlwdGlvbnMve3N1YnNjcmlwdGlvbklkfS9yZXNvdXJjZWdyb3Vwcy97cmVzb3VyY2VHcm91cE5hbWV9/V/MjAyNC0xMS0wMQ=="
-            }
-          ],
-          "argGroups": [
-            {
-              "name": "",
-              "args": [
-                {
-                  "type": "ResourceGroupName",
-                  "var": "$Path.resourceGroupName",
-                  "options": [
-                    "g",
-                    "resource-group"
-                  ],
-                  "required": true,
-                  "idPart": "resource_group"
-                },
-                {
-                  "type": "SubscriptionId",
-                  "var": "$Path.subscriptionId",
-                  "options": [
-                    "subscription"
-                  ],
-                  "required": true,
-                  "idPart": "subscription"
+                  ]
                 }
-              ]
-            },
-            {
-              "name": "Parameters",
-              "args": [
+              ],
+              "operations": [
                 {
-                  "type": "ResourceLocation",
-                  "var": "$parameters.location",
-                  "options": [
-                    "l",
-                    "location"
-                  ],
-                  "required": true,
-                  "group": "Parameters",
-                  "help": {
-                    "short": "The location of the resource group. It cannot be changed after the resource group has been created. It must be one of the supported Azure locations."
-                  }
-                },
-                {
-                  "type": "string",
-                  "var": "$parameters.managedBy",
-                  "options": [
-                    "managed-by"
-                  ],
-                  "group": "Parameters",
-                  "help": {
-                    "short": "The ID of the resource that manages this resource group."
-                  }
-                },
-                {
-                  "type": "object",
-                  "var": "$parameters.tags",
-                  "options": [
-                    "tags"
-                  ],
-                  "group": "Parameters",
-                  "help": {
-                    "short": "The tags attached to the resource group."
-                  },
-                  "additionalProps": {
-                    "item": {
-                      "type": "string"
-                    }
-                  }
-                }
-              ]
-            }
-          ],
-          "operations": [
-            {
-              "operationId": "ResourceGroups_CreateOrUpdate",
-              "http": {
-                "path": "/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}",
-                "request": {
-                  "method": "put",
-                  "path": {
-                    "params": [
-                      {
-                        "type": "string",
-                        "name": "resourceGroupName",
-                        "arg": "$Path.resourceGroupName",
-                        "required": true,
-                        "format": {
-                          "pattern": "^[-\\w\\._\\(\\)]+$",
-                          "maxLength": 90,
-                          "minLength": 1
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "name": "subscriptionId",
-                        "arg": "$Path.subscriptionId",
-                        "required": true
-                      }
-                    ]
-                  },
-                  "query": {
-                    "consts": [
-                      {
-                        "readOnly": true,
-                        "const": true,
-                        "default": {
-                          "value": "2024-11-01"
-                        },
-                        "type": "string",
-                        "name": "api-version",
-                        "required": true
-                      }
-                    ]
-                  },
-                  "body": {
-                    "json": {
-                      "schema": {
-                        "type": "object",
-                        "name": "parameters",
-                        "required": true,
-                        "props": [
+                  "operationId": "ResourceGroups_Get",
+                  "http": {
+                    "path": "/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}",
+                    "request": {
+                      "method": "get",
+                      "path": {
+                        "params": [
                           {
-                            "type": "ResourceLocation",
-                            "name": "location",
-                            "arg": "$parameters.location",
-                            "required": true
+                            "type": "string",
+                            "name": "resourceGroupName",
+                            "arg": "$Path.resourceGroupName",
+                            "required": true,
+                            "format": {
+                              "pattern": "^[-\\w\\._\\(\\)]+$",
+                              "maxLength": 90,
+                              "minLength": 1
+                            }
                           },
                           {
                             "type": "string",
-                            "name": "managedBy",
-                            "arg": "$parameters.managedBy"
-                          },
-                          {
-                            "type": "object",
-                            "name": "tags",
-                            "arg": "$parameters.tags",
-                            "additionalProps": {
-                              "item": {
-                                "type": "string"
-                              }
-                            }
+                            "name": "subscriptionId",
+                            "arg": "$Path.subscriptionId",
+                            "required": true
                           }
-                        ],
-                        "clientFlatten": true
+                        ]
+                      },
+                      "query": {
+                        "consts": [
+                          {
+                            "readOnly": true,
+                            "const": true,
+                            "default": {
+                              "value": "2024-11-01"
+                            },
+                            "type": "string",
+                            "name": "api-version",
+                            "required": true
+                          }
+                        ]
                       }
-                    }
-                  }
-                },
-                "responses": [
-                  {
-                    "statusCode": [
-                      200,
-                      201
-                    ],
-                    "body": {
-                      "json": {
-                        "var": "$Instance",
-                        "schema": {
-                          "type": "object",
-                          "props": [
-                            {
-                              "readOnly": true,
-                              "type": "ResourceId",
-                              "name": "id",
-                              "format": {
-                                "template": "/subscriptions/{}/resourcegroups/{}"
-                              }
-                            },
-                            {
-                              "type": "ResourceLocation",
-                              "name": "location",
-                              "required": true
-                            },
-                            {
-                              "type": "string",
-                              "name": "managedBy"
-                            },
-                            {
-                              "readOnly": true,
-                              "type": "string",
-                              "name": "name"
-                            },
-                            {
+                    },
+                    "responses": [
+                      {
+                        "statusCode": [
+                          200
+                        ],
+                        "body": {
+                          "json": {
+                            "var": "$Instance",
+                            "schema": {
                               "type": "object",
-                              "name": "properties",
                               "props": [
                                 {
                                   "readOnly": true,
+                                  "type": "ResourceId",
+                                  "name": "id",
+                                  "format": {
+                                    "template": "/subscriptions/{}/resourcegroups/{}"
+                                  }
+                                },
+                                {
+                                  "type": "ResourceLocation",
+                                  "name": "location",
+                                  "required": true
+                                },
+                                {
                                   "type": "string",
-                                  "name": "provisioningState"
+                                  "name": "managedBy"
+                                },
+                                {
+                                  "readOnly": true,
+                                  "type": "string",
+                                  "name": "name"
+                                },
+                                {
+                                  "type": "object",
+                                  "name": "properties",
+                                  "props": [
+                                    {
+                                      "readOnly": true,
+                                      "type": "string",
+                                      "name": "provisioningState"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "name": "tags",
+                                  "additionalProps": {
+                                    "item": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "readOnly": true,
+                                  "type": "string",
+                                  "name": "type"
                                 }
                               ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "isError": true,
+                        "body": {
+                          "json": {
+                            "schema": {
+                              "type": "@MgmtErrorFormat"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "object",
+                  "ref": "$Instance",
+                  "clientFlatten": true
+                }
+              ],
+              "resources": [
+                {
+                  "id": "/subscriptions/{}/resourcegroups/{}",
+                  "plane": "mgmt-plane"
+                }
+              ]
+            }
+          }
+        },
+        "create": {
+          "help": {
+            "short": "create"
+          },
+          "versions": {
+            "2024-11-01": {
+              "argGroups": [
+                {
+                  "name": "",
+                  "args": [
+                    {
+                      "type": "ResourceGroupName",
+                      "var": "$Path.resourceGroupName",
+                      "options": [
+                        "g",
+                        "resource-group"
+                      ],
+                      "required": true,
+                      "idPart": "resource_group"
+                    },
+                    {
+                      "type": "SubscriptionId",
+                      "var": "$Path.subscriptionId",
+                      "options": [
+                        "subscription"
+                      ],
+                      "required": true,
+                      "idPart": "subscription"
+                    }
+                  ]
+                },
+                {
+                  "name": "Parameters",
+                  "args": [
+                    {
+                      "type": "ResourceLocation",
+                      "var": "$parameters.location",
+                      "options": [
+                        "l",
+                        "location"
+                      ],
+                      "required": true,
+                      "group": "Parameters",
+                      "help": {
+                        "short": "The location of the resource group. It cannot be changed after the resource group has been created. It must be one of the supported Azure locations."
+                      }
+                    },
+                    {
+                      "type": "string",
+                      "var": "$parameters.managedBy",
+                      "options": [
+                        "managed-by"
+                      ],
+                      "group": "Parameters",
+                      "help": {
+                        "short": "The ID of the resource that manages this resource group."
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "var": "$parameters.tags",
+                      "options": [
+                        "tags"
+                      ],
+                      "group": "Parameters",
+                      "help": {
+                        "short": "The tags attached to the resource group."
+                      },
+                      "additionalProps": {
+                        "item": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "operations": [
+                {
+                  "operationId": "ResourceGroups_CreateOrUpdate",
+                  "http": {
+                    "path": "/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}",
+                    "request": {
+                      "method": "put",
+                      "path": {
+                        "params": [
+                          {
+                            "type": "string",
+                            "name": "resourceGroupName",
+                            "arg": "$Path.resourceGroupName",
+                            "required": true,
+                            "format": {
+                              "pattern": "^[-\\w\\._\\(\\)]+$",
+                              "maxLength": 90,
+                              "minLength": 1
+                            }
+                          },
+                          {
+                            "type": "string",
+                            "name": "subscriptionId",
+                            "arg": "$Path.subscriptionId",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "query": {
+                        "consts": [
+                          {
+                            "readOnly": true,
+                            "const": true,
+                            "default": {
+                              "value": "2024-11-01"
                             },
-                            {
-                              "type": "object",
-                              "name": "tags",
-                              "additionalProps": {
-                                "item": {
-                                  "type": "string"
+                            "type": "string",
+                            "name": "api-version",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "body": {
+                        "json": {
+                          "schema": {
+                            "type": "object",
+                            "name": "parameters",
+                            "required": true,
+                            "props": [
+                              {
+                                "type": "ResourceLocation",
+                                "name": "location",
+                                "arg": "$parameters.location",
+                                "required": true
+                              },
+                              {
+                                "type": "string",
+                                "name": "managedBy",
+                                "arg": "$parameters.managedBy"
+                              },
+                              {
+                                "type": "object",
+                                "name": "tags",
+                                "arg": "$parameters.tags",
+                                "additionalProps": {
+                                  "item": {
+                                    "type": "string"
+                                  }
                                 }
                               }
-                            },
-                            {
-                              "readOnly": true,
-                              "type": "string",
-                              "name": "type"
+                            ],
+                            "clientFlatten": true
+                          }
+                        }
+                      }
+                    },
+                    "responses": [
+                      {
+                        "statusCode": [
+                          200,
+                          201
+                        ],
+                        "body": {
+                          "json": {
+                            "var": "$Instance",
+                            "schema": {
+                              "type": "object",
+                              "props": [
+                                {
+                                  "readOnly": true,
+                                  "type": "ResourceId",
+                                  "name": "id",
+                                  "format": {
+                                    "template": "/subscriptions/{}/resourcegroups/{}"
+                                  }
+                                },
+                                {
+                                  "type": "ResourceLocation",
+                                  "name": "location",
+                                  "required": true
+                                },
+                                {
+                                  "type": "string",
+                                  "name": "managedBy"
+                                },
+                                {
+                                  "readOnly": true,
+                                  "type": "string",
+                                  "name": "name"
+                                },
+                                {
+                                  "type": "object",
+                                  "name": "properties",
+                                  "props": [
+                                    {
+                                      "readOnly": true,
+                                      "type": "string",
+                                      "name": "provisioningState"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "name": "tags",
+                                  "additionalProps": {
+                                    "item": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "readOnly": true,
+                                  "type": "string",
+                                  "name": "type"
+                                }
+                              ]
                             }
-                          ]
+                          }
+                        }
+                      },
+                      {
+                        "isError": true,
+                        "body": {
+                          "json": {
+                            "schema": {
+                              "type": "@MgmtErrorFormat"
+                            }
+                          }
                         }
                       }
-                    }
-                  },
-                  {
-                    "isError": true,
-                    "body": {
-                      "json": {
-                        "schema": {
-                          "type": "@MgmtErrorFormat"
-                        }
-                      }
-                    }
+                    ]
                   }
-                ]
-              }
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "object",
+                  "ref": "$Instance",
+                  "clientFlatten": true
+                }
+              ],
+              "resources": [
+                {
+                  "id": "/subscriptions/{}/resourcegroups/{}",
+                  "plane": "mgmt-plane"
+                }
+              ]
             }
-          ],
-          "outputs": [
-            {
-              "type": "object",
-              "ref": "$Instance",
-              "clientFlatten": true
-            }
-          ],
-          "confirmation": ""
+          }
         }
-      ]
+      },
+      "help": {
+          "short": "command group"
+      }
     }
-  ]
+  }
 }
             "#;
         let metadata: Metadata = serde_json::from_str(input)?;
