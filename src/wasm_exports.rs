@@ -9,6 +9,32 @@ use wasm_bindgen::prelude::*;
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
+    
+    #[wasm_bindgen(js_namespace = console)]
+    fn error(s: &str);
+    
+    #[wasm_bindgen(js_namespace = console)]
+    fn warn(s: &str);
+    
+    #[wasm_bindgen(js_namespace = console)]
+    fn debug(s: &str);
+}
+
+// Initialize tracing for WASM/browser environment
+fn init_tracing() {
+    use tracing_subscriber::prelude::*;
+    use tracing_web::{MakeConsoleWriter, performance_layer};
+    
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false) // No ANSI colors in browser console
+        .with_writer(MakeConsoleWriter); // Route to browser console
+    
+    let perf_layer = performance_layer().with_details_from_fields(tracing_web::Level::Trace);
+    
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(perf_layer)
+        .init();
 }
 
 #[wasm_bindgen]
