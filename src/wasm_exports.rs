@@ -26,6 +26,8 @@ fn init_tracing() {
 #[wasm_bindgen]
 pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
+    init_tracing();
+    tracing::debug!("Running CLI with input: {:?}", args);
     let credential = AccessTokenCredential::new(token.to_string()).map_err(jsfy)?;
     let client = Client::new(
         "https://management.azure.com",
