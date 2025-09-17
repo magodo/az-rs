@@ -24,6 +24,7 @@ export const AzureCLIInterface: React.FC = () => {
         const module = await loadWasmModule();
         setWasmModule(module);
         setWasmReady(true);
+        module.init_tracing();
         setOutput('Azure CLI WebAssembly module initialized successfully. Ready to execute commands.');
       } catch (error) {
         console.error('Failed to initialize WASM module:', error);
