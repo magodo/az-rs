@@ -22,6 +22,7 @@ extern "C" {
 
 // Initialize tracing for WASM/browser environment
 fn init_tracing() {
+    use tracing;
     use tracing_subscriber::prelude::*;
     use tracing_web::{MakeConsoleWriter, performance_layer};
     
@@ -29,7 +30,7 @@ fn init_tracing() {
         .with_ansi(false) // No ANSI colors in browser console
         .with_writer(MakeConsoleWriter); // Route to browser console
     
-    let perf_layer = performance_layer().with_details_from_fields(tracing_web::Level::Trace);
+    let perf_layer = performance_layer();
     
     tracing_subscriber::registry()
         .with(fmt_layer)
