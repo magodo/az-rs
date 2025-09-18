@@ -1,26 +1,48 @@
 static INIT: std::sync::Once = std::sync::Once::new();
 
+fn get_log_level() -> tracing_subscriber::filter::LevelFilter {
+    use tracing_subscriber::filter::LevelFilter;
+    
+    match std::env::var("AZURE_LOG").as_deref() {
+        Ok(level) => match level.to_lowercase().as_str() {
+            "trace" => LevelFilter::TRACE,
+            "debug" => LevelFilter::DEBUG,
+            "info" => LevelFilter::INFO,
+            "warn" => LevelFilter::WARN,
+            "error" => LevelFilter::ERROR,
+            "off" => LevelFilter::OFF,
+            _ => LevelFilter::INFO, // default level
+        },
+        _ => LevelFilter::INFO, // default level
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
-fn build_fmt_layer() -> impl tracing_subscriber::layer::Layer<tracing_subscriber::Registry> + Send + Sync {
+fn init_tracing_subscriber() {
     use std::io;
-    tracing_subscriber::fmt::layer()
+    use tracing_subscriber::prelude::*;
+    
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
-        .with_writer(io::stderr)
+        .with_writer(io::stderr);
+    
+    let level_filter = get_log_level();
+    
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(level_filter)
+        .init();
 }
 
 #[cfg(target_arch = "wasm32")]
-fn build_fmt_layer() -> impl tracing_subscriber::layer::Layer<tracing_subscriber::Registry> + Send + Sync {
+fn init_tracing_subscriber() {
+    use tracing_subscriber::prelude::*;
     use tracing_web::MakeWebConsoleWriter;
-    tracing_subscriber::fmt::layer()
+    
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
         .without_time()
-        .with_writer(MakeWebConsoleWriter::new())
-}
-
-fn _set_global_logger() {
-    use tracing_subscriber::prelude::*;
-    
-    let fmt_layer = build_fmt_layer();
+        .with_writer(MakeWebConsoleWriter::new());
     
     tracing_subscriber::registry()
         .with(fmt_layer)
@@ -29,7 +51,7 @@ fn _set_global_logger() {
 
 pub fn set_global_logger() {
     INIT.call_once(|| {
-        _set_global_logger();
+        init_tracing_subscriber();
         tracing::debug!("Global logger initialized");
     });
 }

@@ -6,16 +6,10 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 
-// Initialize tracing for WASM/browser environment
-#[wasm_bindgen]
-pub fn init_tracing() {
-    console_error_panic_hook::set_once();
-    set_global_logger();
-}
-
 #[wasm_bindgen]
 pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
+    set_global_logger();
 
     let credential = AccessTokenCredential::new(token.to_string()).map_err(jsfy)?;
     let client = Client::new(

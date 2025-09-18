@@ -1,6 +1,5 @@
 // WASM module types
 export interface WasmModule {
-  init_tracing: () => void;
   run_cli: (args: string[],  token: string) => Promise<string>;
 }
 
@@ -34,7 +33,6 @@ export const loadWasmModule = async (): Promise<WasmModule> => {
       
       // Cache and return the module
       wasmModuleCache = {
-        init_tracing: wasmModule.init_tracing,
         run_cli: wasmModule.run_cli
       };
       
