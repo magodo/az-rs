@@ -1,8 +1,8 @@
 use anyhow::Result;
+use az_rs::client::Client;
+use az_rs::log::set_global_logger;
+use az_rs::run;
 use azure_identity::DefaultAzureCredential;
-use azure_rs::client::Client;
-use azure_rs::log::set_global_logger;
-use azure_rs::run;
 use std::{env, path::PathBuf, str::FromStr};
 
 #[tokio::main]

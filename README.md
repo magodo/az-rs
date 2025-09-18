@@ -1,6 +1,6 @@
 A PoC of Azure CLI using Rust. 
 
-**Try it**: https://magodo.github.io/azure
+**Try it**: https://magodo.github.io/az-rs
 
 # Introduction
 

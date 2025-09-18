@@ -1,5 +1,5 @@
 [package]
-name = "azure-rs"
+name = "az-rs"
 description = "Azure CLI written in Rust"
 license = "MIT"
 version = "0.1.0"
