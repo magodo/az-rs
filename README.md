@@ -18,7 +18,11 @@ The API metadata is a description of the Azure API, which is generated from Azur
 
 ## Pre-requisite
 
-In the root folder, create a folder `metadata`, which is meant to store the API metadata files, to be used either during build time (if embedded), or during runtime. Currently, this folder path is hardcoded.
+Initialize the github submodule (the `metadata` folder):
+
+```
+$ git submodule update --init --recursive
+```
 
 ## Features
 
