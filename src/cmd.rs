@@ -10,6 +10,7 @@ fn cmd_base() -> Command {
     command!()
         .subcommand_required(true)
         .arg_required_else_help(true)
+        .disable_help_subcommand(true)
 }
 
 fn cmd_api_stub() -> Command {
