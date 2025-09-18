@@ -1,5 +1,5 @@
 use anyhow::Result;
-use api::ApiManager;
+use api::{invoke::CommandInvocation, ApiManager};
 use arg::CliInput;
 use clap::{ArgMatches, Command};
 use client::Client;
@@ -33,7 +33,10 @@ pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<
             while let Some((_, m)) = matches.subcommand() {
                 matches = m.clone();
             }
-            let invoker = api_manager.build_invocation(&input, &matches)?;
+            let index = api_manager.read_index(input.pos_args().first().unwrap())?;
+            let command_file = index.locate_command_file(input.api_version(), &input)?;
+            let command = api_manager.read_command(&command_file)?;
+            let invoker = CommandInvocation::new(&command, &matches)?;
             let res = invoker.invoke(&client).await?;
             return Ok(res);
         }

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use crate::api::{metadata, ApiManager};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
+use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
 pub fn cmd() -> Command {
@@ -12,6 +13,7 @@ fn cmd_base() -> Command {
     command!()
         .subcommand_required(true)
         .arg_required_else_help(true)
+        .disable_help_subcommand(true)
 }
 
 fn cmd_api_stub() -> Command {
@@ -46,22 +48,22 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
 
     struct CommandDesc {
         name: String,
-        help: Option<metadata::Help>,
+        help: Option<metadata_index::Help>,
     }
 
     let rp = pos_args.first().unwrap();
-    match api_manager.read_metadata(rp) {
-        Ok(metadata) => {
+    match api_manager.read_index(rp) {
+        Ok(index) => {
             let mut args = pos_args.iter();
             let mut commands = vec![];
 
             // Construct a fake command group here to initiate the following while loop
-            let mut cg = metadata::CommandGroup {
+            let mut cg = metadata_index::CommandGroup {
                 command_groups: Some(HashMap::from([(
                     rp.to_string(),
-                    metadata::CommandGroup {
-                        help: metadata.help,
-                        command_groups: Some(metadata.command_groups),
+                    metadata_index::CommandGroup {
+                        help: index.help.clone(),
+                        command_groups: Some(index.command_groups.clone()),
                         commands: None,
                     },
                 )])),
@@ -69,7 +71,7 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
                 commands: None,
             };
 
-            let mut c: Option<metadata::Command> = None;
+            let mut c: Option<metadata_index::Command> = None;
 
             while let Some(arg) = args.next() {
                 if let Some(v) = cg
@@ -110,11 +112,22 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
             );
             if let Some(c) = c {
                 // Construct the last command name as a Command, which contains args
-                cmd = cmd.args(build_args(&c.versions));
+                match index.locate_command_file(None, input) {
+                    Ok(command_file) => match api_manager.read_command(&command_file) {
+                        Ok(command) => {
+                            cmd = cmd.args(build_args(&c.versions, command));
+                        }
+                        Err(err) => {
+                            dbg!("read command failed", err);
+                        }
+                    },
+                    Err(err) => {
+                        dbg!("locate command file failed", err);
+                    }
+                }
             } else {
-                // Construct the last command name as a CommandGroup, which contains commands and potential
+                // Construct the last command name as a CommandGroup, which can contain commands and command groups
                 cmd = cmd.subcommand_required(true).arg_required_else_help(true);
-                // command groups
                 if let Some(commands) = cg.commands {
                     let mut keys: Vec<_> = commands.keys().collect();
                     keys.sort();
@@ -153,19 +166,24 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
     }
 }
 
-fn build_args(versions: &HashMap<String, metadata::VersionCommand>) -> Vec<Arg> {
+fn build_args(versions: &Vec<String>, command: metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
 
-    // TODO: Currently, we only support one API version, which is the latest one.
-    if let Some((_, c)) = versions.iter().max_by_key(|(v, _)| *v) {
-        c.arg_groups
-            .iter()
-            .for_each(|ag| out.extend(ag.args.iter().map(build_arg)));
-    }
+    // Build the api-version arg
+    out.push(
+        Arg::new("api-version")
+            .long("api-version")
+            .help("API version")
+            .value_parser(PossibleValuesParser::new(versions)),
+    );
+    command
+        .arg_groups
+        .iter()
+        .for_each(|ag| out.extend(ag.args.iter().map(build_arg)));
     out
 }
 
-fn build_arg(arg: &metadata::Arg) -> Arg {
+fn build_arg(arg: &metadata_command::Arg) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;

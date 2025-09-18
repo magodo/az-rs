@@ -3,30 +3,17 @@ use std::collections::HashMap;
 
 use crate::client::Client;
 
-use super::metadata::{Command, Operation, Schema, VersionCommand};
-use anyhow::{anyhow, bail, Result};
+use super::metadata_command::{Command, Operation, Schema};
+use anyhow::{bail, Result};
 use clap::ArgMatches;
 
 pub struct CommandInvocation {
-    command: VersionCommand,
+    command: Command,
     matches: ArgMatches,
 }
 
 impl CommandInvocation {
     pub fn new(command: &Command, matches: &ArgMatches) -> Result<Self> {
-        // TODO: Honor the api-version from the matches and choose the correct VersionCommand.
-
-        // By default, we use the latest api version.
-        let version = command
-            .versions
-            .iter()
-            .max_by_key(|(v, _)| (*v).clone())
-            .ok_or(anyhow!("no versioned command defined"))?
-            .0;
-        let command = command.versions.get(version).ok_or(anyhow!(
-            r#"no versioned command found for version "{}""#,
-            version
-        ))?;
         Ok(Self {
             command: command.clone(),
             matches: matches.clone(),
