@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import type { AccountInfo, AuthenticationResult } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
-import { msalConfig } from '../config/authConfig';
+import { loginRequest, msalConfig } from '../config/authConfig';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -64,10 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       
-      const response = await msalInstance.loginPopup({
-        scopes: ['User.Read'],
-        prompt: 'select_account'
-      });
+      const response = await msalInstance.loginPopup(loginRequest);
       
       setAccount(response.account);
       setIsAuthenticated(true);

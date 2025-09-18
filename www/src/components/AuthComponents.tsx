@@ -79,7 +79,6 @@ export const UserProfile: React.FC = () => {
       <div className="user-info">
         <h3>Welcome, {userName}!</h3>
         <p>Email: {userEmail}</p>
-        <p>Account ID: {account.homeAccountId}</p>
       </div>
     </div>
   );

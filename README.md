@@ -1,5 +1,7 @@
 A PoC of Azure CLI using Rust. 
 
+**Try it**: https://magodo.github.io/az-rs
+
 # Introduction
 
 This is a simplified Azure CLI implementation, which execute the command the user specified, or just display the simplified help message (via `-h` or `--help`).
@@ -23,14 +25,12 @@ In the root folder, create a folder `metadata`, which is meant to store the API 
 This package provides the following `features`:
 
 - `embed-api`: Control whether to embed the API metadata with the binary. This only applies when the target is not `wasm32-unknown-unknown` (which always embeds).
-- `runtime-tokio`: Controls whether to use the `tokio` based runtime, or using the Azure standard runtime (when not specified) in the underlying Azure SDK. This only applies when the target is not `wasm32-unknown-unknown`. This conflicts with `runtime-web`.
-- `runtime-web`: Controls whether to use the `wasm_bindgen` based runtime in the underlying Azure SDK. You shall and only shall specify this when targeting to `wasm32-unknown-unknown`. This conflicts with `runtime-tokio`.
 
 ## Native Build
 
 The simplified CLI resides in the example: `src/bin/azure.rs`.
 
-You can build it via (optionally add the `--features runtime-tokio` if needed):
+You can build it via (optionally add the `--features embed-api` if needed):
 
 ```
 cargo install --bin azure --path .
@@ -51,9 +51,6 @@ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --fea
 Then go to the `www` folder and start a HTTP server, e.g.
 
 ```
-python3 -m http.server 8000
+$ npm install
+$ npm run dev
 ```
-
-Now you can open that page from your browser and try to use it.
-
-**NOTE** Since the current available auth method of `azure-sdk-for-rust` is client credential auth, which doesn't support CORS request, you'll have to use a browser extension to workaround the token request.

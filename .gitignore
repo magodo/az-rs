@@ -12,3 +12,6 @@
 *.njsproj
 *.sln
 *.sw?
+
+# Cargo configuration files
+.cargo/*

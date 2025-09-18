@@ -1,19 +1,16 @@
 use crate::azidentityext::access_token_credential::AccessTokenCredential;
 use crate::client::Client;
 use crate::run;
+use crate::log::set_global_logger;
 use std::fmt::Debug;
-use std::{path::PathBuf, result::Result};
+use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
 
 #[wasm_bindgen]
 pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> {
     console_error_panic_hook::set_once();
+    set_global_logger();
+
     let credential = AccessTokenCredential::new(token.to_string()).map_err(jsfy)?;
     let client = Client::new(
         "https://management.azure.com",

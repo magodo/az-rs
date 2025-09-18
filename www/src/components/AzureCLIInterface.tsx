@@ -112,7 +112,17 @@ export const AzureCLIInterface: React.FC = () => {
         accessToken // Using access token instead of client secret
       );
 
-      setOutput(result);
+      // Try to format JSON if the result is valid JSON
+      let formattedResult = result;
+      try {
+        const parsed = JSON.parse(result);
+        formattedResult = JSON.stringify(parsed, null, 2);
+      } catch {
+        // Not valid JSON, use original result
+        formattedResult = result;
+      }
+
+      setOutput(formattedResult);
     } catch (error) {
       console.error('CLI execution failed:', error);
       let errorMessage = 'CLI execution failed';

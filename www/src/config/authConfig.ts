@@ -51,6 +51,7 @@ export const msalConfig: Configuration = {
  */
 export const loginRequest: PopupRequest = {
     scopes: ["User.Read"],
+    prompt: 'select_account'
 };
 
 /**

@@ -1,26 +1,46 @@
 #!/usr/bin/env node
 
-/**
- * Script to move azure.js from public/pkg to src/wasm and fix the WASM path
- * Also compresses WASM files with Brotli for better performance
- * Run this after compiling the WASM module to prepare it for Vite
- */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { compress } from 'brotli';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SOURCE_JS = path.join(__dirname, '../public/pkg/azure.js');
-const SOURCE_DTS = path.join(__dirname, '../public/pkg/azure.d.ts');
-const SOURCE_WASM = path.join(__dirname, '../public/pkg/azure_bg.wasm');
+const SOURCE_JS = path.join(__dirname, '../public/pkg/az_rs.js');
+const SOURCE_DTS = path.join(__dirname, '../public/pkg/az_rs.d.ts');
+const SOURCE_WASM = path.join(__dirname, '../public/pkg/az_rs_bg.wasm');
 const TARGET_DIR = path.join(__dirname, '../src/wasm');
-const TARGET_JS = path.join(TARGET_DIR, 'azure.js');
-const TARGET_DTS = path.join(TARGET_DIR, 'azure.d.ts');
+const TARGET_JS = path.join(TARGET_DIR, 'az_rs.js');
+const TARGET_DTS = path.join(TARGET_DIR, 'az_rs.d.ts');
 const PUBLIC_PKG_DIR = path.join(__dirname, '../public/pkg');
+
+function getViteBasePath() {
+  try {
+    const viteConfigPath = path.join(__dirname, '../vite.config.ts');
+    if (!fs.existsSync(viteConfigPath)) {
+      console.log('⚠️  vite.config.ts not found, using default base path');
+      return '/';
+    }
+    
+    const configContent = fs.readFileSync(viteConfigPath, 'utf8');
+    
+    // Simple regex to extract base path from vite config
+    const baseMatch = configContent.match(/base:\s*['"`]([^'"`]+)['"`]/);
+    if (baseMatch) {
+      const basePath = baseMatch[1];
+      console.log(`📁 Found Vite base path: ${basePath}`);
+      return basePath;
+    }
+    
+    console.log('📁 No base path found in vite.config.ts, using default');
+    return '/';
+  } catch (error) {
+    console.log(`⚠️  Error reading vite.config.ts: ${error.message}, using default base path`);
+    return '/';
+  }
+}
 
 function ensureDirectoryExists(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -29,77 +49,40 @@ function ensureDirectoryExists(dirPath) {
   }
 }
 
-function compressWasmFile() {
-  try {
-    if (!fs.existsSync(SOURCE_WASM)) {
-      console.log(`⚠️  WASM file not found: ${SOURCE_WASM}`);
-      return false;
-    }
-
-    const wasmBuffer = fs.readFileSync(SOURCE_WASM);
-    const originalSize = wasmBuffer.length;
-    
-    console.log(`📦 Compressing WASM file (${(originalSize / 1024 / 1024).toFixed(2)} MB)...`);
-    
-    // Compress with Brotli (quality 6 provides good balance of compression ratio and speed)
-    const compressedBuffer = compress(wasmBuffer, {
-      quality: 6,
-      lgwin: 22
-    });
-    
-    if (!compressedBuffer) {
-      throw new Error('Brotli compression failed');
-    }
-    
-    const compressedSize = compressedBuffer.length;
-    const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
-    
-    // Write compressed file to public/pkg directory
-    const compressedPath = `${SOURCE_WASM}.br`;
-    fs.writeFileSync(compressedPath, compressedBuffer);
-    
-    console.log(`✅ WASM compressed: ${(compressedSize / 1024 / 1024).toFixed(2)} MB (${compressionRatio}% reduction)`);
-    console.log(`   Saved: ${compressedPath}`);
-    
-    return true;
-  } catch (error) {
-    console.error(`❌ Error compressing WASM: ${error.message}`);
-    console.log('   Continuing with uncompressed WASM...');
-    return false;
-  }
-}
-
 function copyAndModifyJsFile() {
   try {
     // Read the original file
     const content = fs.readFileSync(SOURCE_JS, 'utf8');
     
-    // Check if compressed WASM file exists
-    const compressedWasmExists = fs.existsSync(`${SOURCE_WASM}.br`);
-    const wasmPath = compressedWasmExists ? '/pkg/azure_bg.wasm.br' : '/pkg/azure_bg.wasm';
+    // Get the Vite base path
+    const basePath = getViteBasePath();
     
+    // Construct the WASM path with base path
+    const wasmFileName = 'az_rs_bg.wasm';
+    const wasmPath = path.posix.join(basePath, 'pkg', wasmFileName);
+
     console.log(`📝 Using WASM path: ${wasmPath}`);
     
     // Multiple patterns to handle different wasm-pack outputs
     let modifiedContent = content;
     let replacementsMade = 0;
     
-    // Pattern 1: new URL('azure_bg.wasm', import.meta.url)
-    const pattern1 = /module_or_path = new URL\('azure_bg\.wasm', import\.meta\.url\);/g;
+    // Pattern 1: new URL('az_rs_bg.wasm', import.meta.url)
+    const pattern1 = /module_or_path = new URL\('az_rs_bg\.wasm', import\.meta\.url\);/g;
     if (pattern1.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern1, `module_or_path = '${wasmPath}';`);
       replacementsMade++;
     }
     
-    // Pattern 2: new URL("azure_bg.wasm", import.meta.url)
-    const pattern2 = /module_or_path = new URL\("azure_bg\.wasm", import\.meta\.url\);/g;
+    // Pattern 2: new URL("az_rs_bg.wasm", import.meta.url)
+    const pattern2 = /module_or_path = new URL\("az_rs_bg\.wasm", import\.meta\.url\);/g;
     if (pattern2.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern2, `module_or_path = '${wasmPath}';`);
       replacementsMade++;
     }
     
-    // Pattern 3: Any other similar pattern with azure_bg.wasm
-    const pattern3 = /new URL\(['"]azure_bg\.wasm['"], import\.meta\.url\)/g;
+    // Pattern 3: Any other similar pattern with az_rs_bg.wasm
+    const pattern3 = /new URL\(['"]az_rs_bg\.wasm['"], import\.meta\.url\)/g;
     if (pattern3.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern3, `'${wasmPath}'`);
       replacementsMade++;
@@ -117,7 +100,7 @@ function copyAndModifyJsFile() {
       // Show lines that might contain the WASM reference
       const lines = content.split('\n');
       const wasmLines = lines.filter(line => 
-        line.includes('azure_bg.wasm') || 
+        line.includes('az_rs_bg.wasm') || 
         line.includes('import.meta.url')
       );
       
@@ -127,9 +110,6 @@ function copyAndModifyJsFile() {
       }
     } else {
       console.log(`✅ Fixed ${replacementsMade} WASM path(s) to point to ${wasmPath}`);
-      if (compressedWasmExists) {
-        console.log(`🗜️  Using compressed WASM file for better performance`);
-      }
     }
     
   } catch (error) {
@@ -169,20 +149,12 @@ function main() {
   // Ensure public/pkg directory exists
   ensureDirectoryExists(PUBLIC_PKG_DIR);
   
-  // Compress WASM file
-  const compressionSuccess = compressWasmFile();
-  
   // Copy and modify files
   copyAndModifyJsFile();
   copyTypeDefinitions();
   
   console.log('\n✨ WASM module is ready for Vite!');
-  console.log('You can now import it with: import("../wasm/azure.js")');
-  
-  if (compressionSuccess) {
-    console.log('🗜️  Brotli compressed WASM available for production builds');
-    console.log('   Configure your web server to serve .br files with proper Content-Encoding');
-  }
+  console.log('You can now import it with: import("../wasm/az_rs.js")');
 }
 
 // Run main function
