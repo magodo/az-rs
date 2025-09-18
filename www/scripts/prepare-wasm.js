@@ -8,12 +8,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SOURCE_JS = path.join(__dirname, '../public/pkg/azure_rs.js');
-const SOURCE_DTS = path.join(__dirname, '../public/pkg/azure_rs.d.ts');
-const SOURCE_WASM = path.join(__dirname, '../public/pkg/azure_rs_bg.wasm');
+const SOURCE_JS = path.join(__dirname, '../public/pkg/az_rs.js');
+const SOURCE_DTS = path.join(__dirname, '../public/pkg/az_rs.d.ts');
+const SOURCE_WASM = path.join(__dirname, '../public/pkg/az_rs_bg.wasm');
 const TARGET_DIR = path.join(__dirname, '../src/wasm');
-const TARGET_JS = path.join(TARGET_DIR, 'azure_rs.js');
-const TARGET_DTS = path.join(TARGET_DIR, 'azure_rs.d.ts');
+const TARGET_JS = path.join(TARGET_DIR, 'az_rs.js');
+const TARGET_DTS = path.join(TARGET_DIR, 'az_rs.d.ts');
 const PUBLIC_PKG_DIR = path.join(__dirname, '../public/pkg');
 
 function getViteBasePath() {
@@ -58,7 +58,7 @@ function copyAndModifyJsFile() {
     const basePath = getViteBasePath();
     
     // Construct the WASM path with base path
-    const wasmFileName = 'azure_bg.wasm';
+    const wasmFileName = 'az_rs_bg.wasm';
     const wasmPath = path.posix.join(basePath, 'pkg', wasmFileName);
 
     console.log(`📝 Using WASM path: ${wasmPath}`);
@@ -67,22 +67,22 @@ function copyAndModifyJsFile() {
     let modifiedContent = content;
     let replacementsMade = 0;
     
-    // Pattern 1: new URL('azure_bg.wasm', import.meta.url)
-    const pattern1 = /module_or_path = new URL\('azure_bg\.wasm', import\.meta\.url\);/g;
+    // Pattern 1: new URL('az_rs_bg.wasm', import.meta.url)
+    const pattern1 = /module_or_path = new URL\('az_rs_bg\.wasm', import\.meta\.url\);/g;
     if (pattern1.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern1, `module_or_path = '${wasmPath}';`);
       replacementsMade++;
     }
     
-    // Pattern 2: new URL("azure_bg.wasm", import.meta.url)
-    const pattern2 = /module_or_path = new URL\("azure_bg\.wasm", import\.meta\.url\);/g;
+    // Pattern 2: new URL("az_rs_bg.wasm", import.meta.url)
+    const pattern2 = /module_or_path = new URL\("az_rs_bg\.wasm", import\.meta\.url\);/g;
     if (pattern2.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern2, `module_or_path = '${wasmPath}';`);
       replacementsMade++;
     }
     
-    // Pattern 3: Any other similar pattern with azure_bg.wasm
-    const pattern3 = /new URL\(['"]azure_bg\.wasm['"], import\.meta\.url\)/g;
+    // Pattern 3: Any other similar pattern with az_rs_bg.wasm
+    const pattern3 = /new URL\(['"]az_rs_bg\.wasm['"], import\.meta\.url\)/g;
     if (pattern3.test(modifiedContent)) {
       modifiedContent = modifiedContent.replace(pattern3, `'${wasmPath}'`);
       replacementsMade++;
@@ -100,7 +100,7 @@ function copyAndModifyJsFile() {
       // Show lines that might contain the WASM reference
       const lines = content.split('\n');
       const wasmLines = lines.filter(line => 
-        line.includes('azure_bg.wasm') || 
+        line.includes('az_rs_bg.wasm') || 
         line.includes('import.meta.url')
       );
       
@@ -154,7 +154,7 @@ function main() {
   copyTypeDefinitions();
   
   console.log('\n✨ WASM module is ready for Vite!');
-  console.log('You can now import it with: import("../wasm/azure_rs.js")');
+  console.log('You can now import it with: import("../wasm/az_rs.js")');
 }
 
 // Run main function

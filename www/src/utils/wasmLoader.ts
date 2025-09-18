@@ -25,8 +25,8 @@ export const loadWasmModule = async (): Promise<WasmModule> => {
   // Create initialization promise
   initPromise = (async () => {
     try {
-      // Direct import now works since azure.js is in src/
-      const wasmModule = await import('../wasm/azure.js');
+      // Direct import now works since azure_rs.js is in src/
+      const wasmModule = await import('../wasm/az_rs.js');
       
       // Initialize the WASM module
       await wasmModule.default();
