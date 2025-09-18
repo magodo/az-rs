@@ -46,7 +46,7 @@ jobs:
         run: cargo install wasm-pack
       
       - name: Build WASM
-        run: RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --features runtime-web
+        run: RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web
       
       - name: Install npm dependencies
         working-directory: www
