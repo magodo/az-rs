@@ -10,45 +10,36 @@ crate-type = ["cdylib", "rlib"]
 embed-api = [
     "dep:rust-embed",
 ]
-runtime-tokio = [
-    "typespec_client_core/tokio",
-    "dep:tokio",
-]
-runtime-web = [
-    "typespec_client_core/wasm_bindgen",
-    "uuid/js",
-    "dep:tracing-web",
-    "dep:wasm-bindgen",
-    "dep:wasm-bindgen-futures",
-    "dep:console_error_panic_hook",
-    "dep:getrandom",
-    "dep:rust-embed",
-]
 
 [dependencies]
 anyhow = "1.0.98"
 azure_core = "0.27.0"
 azure_identity = "0.27.0"
-typespec_client_core = { version = "0.7.0" }
 bytes = "1.10.1"
 chrono = "0.4.41"
 clap = { version = "4.5.40", features = ["derive", "cargo", "string"] }
 serde = "1.0.219"
 serde_json = "1.0.140"
-uuid = { version = "1", features = ["v4"] }
 async-trait = "0.1.89"
 
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
-tokio = { version = "1.45.1", optional = true }
-rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
+[target.'cfg(target_family = "wasm")'.dependencies]
+rust-embed = { version = "8.7.2", features = ["debug-embed"] }
+wasm-bindgen = { version = "0.2.100" }
+wasm-bindgen-futures = { version = "0.4.50" }
+console_error_panic_hook = { version = "0.1.7" }
+tracing-web = { version = "0.1" }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+typespec_client_core = { version = "0.7.0", features = ["wasm_bindgen"] }
+uuid = { version = "1", features = ["v4", "js"] }
 
-wasm-bindgen = { version = "0.2.100", optional = true }
-wasm-bindgen-futures = { version = "0.4.50", optional = true }
-console_error_panic_hook = { version = "0.1.7", optional = true }
-tracing-web = { version = "0.1", optional = true }
-getrandom = { version = "0.3", features = ["wasm_js"], optional = true }
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.45.1" }
+typespec_client_core = { version = "0.7.0", features = ["tokio"] }
+uuid = { version = "1", features = ["v4"] }
+rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
@@ -57,7 +48,6 @@ tokio = { version = "1.45.1" }
 [[bin]]
 name = "azure"
 path = "src/bin/azure.rs"
-required-features = ["runtime-tokio"]
 
 [[example]]
 name = "client"
