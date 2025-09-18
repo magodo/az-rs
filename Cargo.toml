@@ -2,6 +2,13 @@
 name = "azure-rs"
 version = "0.1.0"
 edition = "2024"
+exclude = [
+    "/target/*",
+    "/www/*",
+    "/examples/*",
+    "/metadata/*",
+    "/pkg/*",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
