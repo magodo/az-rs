@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::client::Client;
 
-use super::metadata::{Command, Operation, Schema};
+use super::metadata_command::{Command, Operation, Schema};
 use anyhow::{bail, Result};
 use clap::ArgMatches;
 
@@ -13,16 +13,16 @@ pub struct CommandInvocation {
 }
 
 impl CommandInvocation {
-    pub fn new(command: &Command, matches: &ArgMatches) -> Self {
-        Self {
+    pub fn new(command: &Command, matches: &ArgMatches) -> Result<Self> {
+        Ok(Self {
             command: command.clone(),
             matches: matches.clone(),
-        }
+        })
     }
 
     pub async fn invoke(&self, client: &Client) -> Result<String> {
         if self.command.operations.is_empty() {
-            bail!("No operation found for command {}", self.command.name);
+            bail!("no operation found for this command");
         }
         let operation = self.command.operations.first().unwrap();
         let operation_ionvocation = OperationInvocation::new(operation, &self.matches);

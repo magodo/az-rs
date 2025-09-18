@@ -1,5 +1,8 @@
-use crate::api::{metadata, ApiManager};
+use std::collections::HashMap;
+
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
+use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
 pub fn cmd() -> Command {
@@ -42,85 +45,145 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
             cmd_api_base_real().subcommands(api_manager.list_rps().iter().map(Command::new)),
         );
     }
+
+    struct CommandDesc {
+        name: String,
+        help: Option<metadata_index::Help>,
+    }
+
     let rp = pos_args.first().unwrap();
-    match api_manager.read_metadata(rp) {
-        Ok(metadata) => {
+    match api_manager.read_index(rp) {
+        Ok(index) => {
             let mut args = pos_args.iter();
-            let mut command_names = vec![];
+            let mut commands = vec![];
 
             // Construct a fake command group here to initiate the following while loop
-            let mut cg = metadata::CommandGroup {
-                name: rp.to_string(),
-                command_groups: Some(metadata.command_groups),
-                ..metadata::CommandGroup::default()
+            let mut cg = metadata_index::CommandGroup {
+                command_groups: Some(HashMap::from([(
+                    rp.to_string(),
+                    metadata_index::CommandGroup {
+                        help: index.help.clone(),
+                        command_groups: Some(index.command_groups.clone()),
+                        commands: None,
+                    },
+                )])),
+                help: None,
+                commands: None,
             };
 
-            let mut c: Option<metadata::Command> = None;
+            let mut c: Option<metadata_index::Command> = None;
 
             while let Some(arg) = args.next() {
-                command_names.push(arg.to_string());
-
                 if let Some(v) = cg
                     .command_groups
-                    .clone()
-                    .and_then(|cgs| cgs.iter().find(|cg| cg.name.as_str() == *arg).cloned())
+                    .as_ref()
+                    .and_then(|cg| cg.get(*arg).cloned())
                 {
+                    commands.push(CommandDesc {
+                        name: arg.to_string(),
+                        help: v.help.clone(),
+                    });
                     cg = v;
-                } else if let Some(v) = cg
-                    .commands
-                    .iter()
-                    .find(|c| c.name.as_str() == *arg)
-                    .cloned()
-                {
+                } else if let Some(v) = cg.commands.as_ref().and_then(|c| c.get(*arg).cloned()) {
+                    commands.push(CommandDesc {
+                        name: arg.to_string(),
+                        help: v.help.clone(),
+                    });
                     // Stop once we meet a command.
                     // It can happen that there are still remaining positional arguments here, we
                     // tolerate them here as there is no obvious way to handle it correctly during
                     // constructing clap::Command.
                     c = Some(v);
                     break;
+                } else {
+                    // Stop if we encountered an unknown argument, which is neither a command nor a
+                    // command group.
+                    break;
                 }
             }
 
-            let mut command_names_rev = command_names.iter().rev();
-            let mut cmd = Command::new(command_names_rev.next().unwrap());
+            let mut commands_rev = commands.iter().rev();
+            let last_command = commands_rev.next().unwrap();
+            let mut cmd = Command::new(last_command.name.clone()).about(
+                last_command
+                    .help
+                    .as_ref()
+                    .map_or("".to_string(), |v| v.short.clone()),
+            );
             if let Some(c) = c {
                 // Construct the last command name as a Command, which contains args
-                cmd = cmd.args(build_args(&c.arg_groups));
+                match index.locate_command_file(None, input) {
+                    Ok(command_file) => match api_manager.read_command(&command_file) {
+                        Ok(command) => {
+                            cmd = cmd.args(build_args(&c.versions, command));
+                        }
+                        Err(err) => {
+                            dbg!("read command failed", err);
+                        }
+                    },
+                    Err(err) => {
+                        dbg!("locate command file failed", err);
+                    }
+                }
             } else {
-                // Construct the last command name as a CommandGroup, which contains commands and potential
-                // command groups
-                cmd = cmd
-                    .subcommands(cg.commands.iter().map(|c| Command::new(c.name.clone())))
-                    .subcommand_required(true)
-                    .arg_required_else_help(true);
+                // Construct the last command name as a CommandGroup, which can contain commands and command groups
+                cmd = cmd.subcommand_required(true).arg_required_else_help(true);
+                if let Some(commands) = cg.commands {
+                    let mut keys: Vec<_> = commands.keys().collect();
+                    keys.sort();
+                    cmd = cmd.subcommands(keys.iter().map(|name| {
+                        let c = commands.get(*name).unwrap();
+                        Command::new(*name)
+                            .about(c.help.as_ref().map_or("".to_string(), |v| v.short.clone()))
+                    }))
+                }
                 if let Some(cgs) = cg.command_groups {
-                    cmd = cmd.subcommands(cgs.iter().map(|c| Command::new(c.name.clone())));
+                    let mut keys: Vec<_> = cgs.keys().collect();
+                    keys.sort();
+                    cmd = cmd.subcommands(keys.iter().map(|name| {
+                        let cg = cgs.get(*name).unwrap();
+                        Command::new(*name)
+                            .about(cg.help.as_ref().map_or("".to_string(), |v| v.short.clone()))
+                    }));
                 }
             }
-            for name in command_names_rev {
-                cmd = Command::new(name.clone())
+            for command in commands_rev {
+                cmd = Command::new(command.name.clone())
+                    .about(
+                        command
+                            .help
+                            .as_ref()
+                            .map_or("".to_string(), |v| v.short.clone()),
+                    )
                     .subcommand(cmd)
-                    .subcommand_required(true)
-                    .arg_required_else_help(true);
             }
             cmd_base().subcommand(cmd_api_base_real().subcommand(cmd))
         }
         Err(err) => {
-            dbg!("subcommand construction failed: {}", err);
+            dbg!("subcommand construction failed", err);
             cmd_base().subcommand(cmd_api_base_real().subcommand(Command::new(rp.to_string())))
         }
     }
 }
 
-fn build_args(arg_groups: &Vec<metadata::ArgGroup>) -> Vec<Arg> {
+fn build_args(versions: &Vec<String>, command: metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
-    arg_groups
+
+    // Build the api-version arg
+    out.push(
+        Arg::new("api-version")
+            .long("api-version")
+            .help("API version")
+            .value_parser(PossibleValuesParser::new(versions)),
+    );
+    command
+        .arg_groups
         .iter()
         .for_each(|ag| out.extend(ag.args.iter().map(build_arg)));
     out
 }
 
-fn build_arg(arg: &metadata::Arg) -> Arg {
+fn build_arg(arg: &metadata_command::Arg) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;

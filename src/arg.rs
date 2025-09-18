@@ -71,6 +71,20 @@ impl CliInput {
             != 0
     }
 
+    pub fn api_version(&self) -> Option<String> {
+        if let Arg::Optional(_, v) = self.args.iter().find(|arg| {
+            if let Arg::Optional(k, _) = arg {
+                k == "api-version"
+            } else {
+                false
+            }
+        })? {
+            v.clone()
+        } else {
+            None
+        }
+    }
+
     pub fn pos_args(&self) -> Vec<&str> {
         self.args
             .iter()
