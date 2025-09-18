@@ -8,12 +8,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SOURCE_JS = path.join(__dirname, '../public/pkg/azure.js');
-const SOURCE_DTS = path.join(__dirname, '../public/pkg/azure.d.ts');
-const SOURCE_WASM = path.join(__dirname, '../public/pkg/azure_bg.wasm');
+const SOURCE_JS = path.join(__dirname, '../public/pkg/azure_rs.js');
+const SOURCE_DTS = path.join(__dirname, '../public/pkg/azure_rs.d.ts');
+const SOURCE_WASM = path.join(__dirname, '../public/pkg/azure_rs_bg.wasm');
 const TARGET_DIR = path.join(__dirname, '../src/wasm');
-const TARGET_JS = path.join(TARGET_DIR, 'azure.js');
-const TARGET_DTS = path.join(TARGET_DIR, 'azure.d.ts');
+const TARGET_JS = path.join(TARGET_DIR, 'azure_rs.js');
+const TARGET_DTS = path.join(TARGET_DIR, 'azure_rs.d.ts');
 const PUBLIC_PKG_DIR = path.join(__dirname, '../public/pkg');
 
 function getViteBasePath() {
@@ -154,7 +154,7 @@ function main() {
   copyTypeDefinitions();
   
   console.log('\n✨ WASM module is ready for Vite!');
-  console.log('You can now import it with: import("../wasm/azure.js")');
+  console.log('You can now import it with: import("../wasm/azure_rs.js")');
 }
 
 // Run main function
