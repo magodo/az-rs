@@ -16,7 +16,7 @@ pub mod log;
 pub mod wasm_exports;
 
 pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<String> {
-    tracing::debug!("Running CLI with input: {:?}", raw_input);
+    tracing::info!("Running CLI with input: {:?}", raw_input);
 
     let api_manager = ApiManager::new(p)?;
 
