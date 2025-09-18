@@ -1,25 +1,13 @@
 use anyhow::Result;
 use azure::client::Client;
+use azure::log::set_global_logger;
 use azure::run;
 use azure_identity::DefaultAzureCredential;
-use std::{env, io, path::PathBuf, str::FromStr};
-
-// Simple tracing setup without tracing-web
-fn init_tracing_simple() {
-    use tracing_subscriber::prelude::*;
-    
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(false)
-        .with_writer(io::stderr);                                                                                                                                                                                                                                                                                                                                                       
-    
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .init();
-}
+use std::{env, path::PathBuf, str::FromStr};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    init_tracing_simple();
+    set_global_logger();
 
     let credential = DefaultAzureCredential::new()?;
     let client = Client::new(

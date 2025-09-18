@@ -10,6 +10,7 @@ pub mod arg;
 pub mod azidentityext;
 pub mod client;
 pub mod cmd;
+pub mod log;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_exports;
