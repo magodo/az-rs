@@ -11,9 +11,9 @@ fn get_log_level() -> tracing_subscriber::filter::LevelFilter {
             "warn" => LevelFilter::WARN,
             "error" => LevelFilter::ERROR,
             "off" => LevelFilter::OFF,
-            _ => LevelFilter::INFO, // default level
+            _ => LevelFilter::OFF, // default level
         },
-        _ => LevelFilter::INFO, // default level
+        _ => LevelFilter::OFF, // default level
     }
 }
 
