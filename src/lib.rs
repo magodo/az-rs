@@ -30,16 +30,17 @@ pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<
                 vec![]
             };
             let input = CliInput::new(args)?;
-            let mut matches = get_matches(cmd::cmd_api(&api_manager, &input), raw_input.clone())?;
+            let (cmd, cmd_metadata) = cmd::cmd_api(&api_manager, &input);
+            let mut matches = get_matches(cmd, raw_input.clone())?;
 
-            // Invoke the api call
+            // Reaches here indicates an API command/operation is specified.
+            let cmd_metadata = cmd_metadata.unwrap();
+
+            // Match the subcommand to the end, which returns the matches for the last subcommand.
             while let Some((_, m)) = matches.subcommand() {
                 matches = m.clone();
             }
-            let index = api_manager.read_index(input.pos_args().first().unwrap())?;
-            let command_file = index.locate_command_file(input.api_version(), &input)?;
-            let command = api_manager.read_command(&command_file)?;
-            let invoker = CommandInvocation::new(&command, &matches)?;
+            let invoker = CommandInvocation::new(&cmd_metadata, &matches)?;
             let res = invoker.invoke(&client).await?;
             return Ok(res);
         }

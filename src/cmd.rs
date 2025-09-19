@@ -36,13 +36,21 @@ pub fn cmd_api_base() -> Command {
     Command::new("api").about("Directly invoke the Azure API primitives.")
 }
 
-pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
+// cmd_api parses the raw CLI args for `api` subcommand, returns a precise clap::Command and
+// a potential Command metadata (if the raw CLI args ends to a command).
+pub fn cmd_api(
+    api_manager: &ApiManager,
+    input: &CliInput,
+) -> (Command, Option<metadata_command::Command>) {
     let pos_args = input.pos_args();
 
     // No positional argument specified, list the rps
     if pos_args.is_empty() {
-        return cmd_base().subcommand(
-            cmd_api_base_real().subcommands(api_manager.list_rps().iter().map(Command::new)),
+        return (
+            cmd_base().subcommand(
+                cmd_api_base_real().subcommands(api_manager.list_rps().iter().map(Command::new)),
+            ),
+            None,
         );
     }
 
@@ -51,8 +59,9 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
         help: Option<metadata_index::Help>,
     }
 
+    let mut command_metadata = None;
     let rp = pos_args.first().unwrap();
-    match api_manager.read_index(rp) {
+    let cmd = match api_manager.read_index(rp) {
         Ok(index) => {
             let mut args = pos_args.iter();
             let mut commands = vec![];
@@ -115,7 +124,8 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
                 match index.locate_command_file(None, input) {
                     Ok(command_file) => match api_manager.read_command(&command_file) {
                         Ok(command) => {
-                            cmd = cmd.args(build_args(&c.versions, command));
+                            cmd = cmd.args(build_args(&c.versions, &command));
+                            command_metadata = Some(command);
                         }
                         Err(err) => {
                             dbg!("read command failed", err);
@@ -163,10 +173,11 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
             dbg!("subcommand construction failed", err);
             cmd_base().subcommand(cmd_api_base_real().subcommand(Command::new(rp.to_string())))
         }
-    }
+    };
+    (cmd, command_metadata)
 }
 
-fn build_args(versions: &Vec<String>, command: metadata_command::Command) -> Vec<Arg> {
+fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
 
     // Build the api-version arg
