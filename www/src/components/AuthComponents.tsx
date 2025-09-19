@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuthStatus, useAzureAuth } from '../hooks/useAzureAuth';
+import { TenantInput } from './TenantInput';
 
 interface AuthenticatedContentProps {
   children: React.ReactNode;
@@ -32,34 +33,80 @@ export const AuthenticatedContent: React.FC<AuthenticatedContentProps> = ({
 };
 
 /**
- * Login/Logout button component
+ * Login/Logout button component with tenant selection
  */
 export const AuthButton: React.FC = () => {
   const { isAuthenticated, loading, error } = useAuthStatus();
-  const { login, logout } = useAzureAuth();
+  const { login, logout, currentTenantId } = useAzureAuth();
+  const [selectedTenantId, setSelectedTenantId] = useState(currentTenantId);
 
   const handleAuthAction = async () => {
     if (isAuthenticated) {
       await logout();
     } else {
-      await login();
+      await login(selectedTenantId);
     }
   };
 
-  return (
-    <div className="auth-button-container">
-      <button 
-        onClick={handleAuthAction}
-        disabled={loading}
-        className={`auth-button ${isAuthenticated ? 'logout' : 'login'}`}
-      >
-        {loading ? 'Loading...' : isAuthenticated ? 'Sign Out' : 'Sign In with Microsoft'}
-      </button>
-      {error && (
-        <div className="auth-error">
-          Error: {error}
+  const handleTenantChange = (tenantId: string) => {
+    setSelectedTenantId(tenantId);
+    // If user is already authenticated and changes tenant, we should logout first
+    if (isAuthenticated && tenantId !== currentTenantId) {
+      logout();
+    }
+  };
+
+  if (isAuthenticated) {
+    return (
+      <div className="auth-button-container authenticated">
+        <button 
+          onClick={handleAuthAction}
+          disabled={loading}
+          className="auth-button logout"
+        >
+          {loading ? 'Loading...' : 'Sign Out'}
+        </button>
+        
+        {error && (
+          <div className="auth-error">
+            Error: {error}
+          </div>
+        )}
+        
+        <div className="tenant-info">
+          <small>Current tenant: {currentTenantId}</small>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="auth-button-container unauthenticated">
+      <div className="auth-horizontal-layout">
+        <div className="tenant-input-wrapper">
+          <TenantInput
+            onTenantChange={handleTenantChange}
+            disabled={loading}
+            initialValue={selectedTenantId}
+          />
+        </div>
+        
+        <div className="auth-action-wrapper">
+          <button 
+            onClick={handleAuthAction}
+            disabled={loading}
+            className="auth-button login"
+          >
+            {loading ? 'Loading...' : 'Sign In with Microsoft'}
+          </button>
+          
+          {error && (
+            <div className="auth-error">
+              Error: {error}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -85,13 +132,13 @@ export const UserProfile: React.FC = () => {
 };
 
 /**
- * Login prompt component
+ * Login prompt component with tenant selection
  */
 export const LoginPrompt: React.FC = () => {
   return (
     <div className="login-prompt">
-      <h2>Authentication Required</h2>
-      <p>Please sign in to access Azure resources.</p>
+      <h2>Welcome to Azure CLI Browser</h2>
+      <p>Access Azure resources and manage your cloud infrastructure from your browser.</p>
       <AuthButton />
     </div>
   );

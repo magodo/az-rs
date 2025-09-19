@@ -9,8 +9,8 @@ function AppContent() {
     <>
       <header className="app-header">
         <h1>Azure CLI on Browser</h1>
-        <AuthButton />
       </header>
+        <AuthButton />
 
       <main className="app-main">
         <AuthenticatedContent
