@@ -8,7 +8,6 @@ import type { Configuration, PopupRequest } from "@azure/msal-browser";
 export const msalConfig: Configuration = {
     auth: {
         clientId: import.meta.env.VITE_CLIENT_ID || "your-client-id-here", // This is the ONLY mandatory field
-        authority: import.meta.env.VITE_AUTHORITY || "https://login.microsoftonline.com/common", // Defaults to "https://login.microsoftonline.com/common"
         redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin, // Points to window.location.origin by default
         postLogoutRedirectUri: import.meta.env.VITE_POST_LOGOUT_REDIRECT_URI || window.location.origin, // Indicates the page to navigate after logout.
     },
