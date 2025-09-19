@@ -124,7 +124,6 @@ export const AzureCLIInterface: React.FC = () => {
 
       setOutput(formattedResult);
     } catch (error) {
-      console.error('CLI execution failed:', error);
       let errorMessage = 'CLI execution failed';
 
       if (error instanceof Error) {
