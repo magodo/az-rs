@@ -46,10 +46,19 @@ pub fn cmd_api(
 
     // No positional argument specified, list the rps
     if pos_args.is_empty() {
+        let rps = &api_manager.index.rps;
+        let mut keys: Vec<_> = rps.keys().collect();
+        keys.sort();
         return (
-            cmd_base().subcommand(
-                cmd_api_base_real().subcommands(api_manager.list_rps().iter().map(Command::new)),
-            ),
+            cmd_base().subcommand(cmd_api_base_real().subcommands(keys.iter().map(|k| {
+                Command::new(*k).about(
+                    rps.get(k.as_str())
+                        .unwrap()
+                        .help
+                        .as_ref()
+                        .map_or("".to_string(), |v| v.short.clone()),
+                )
+            }))),
             None,
         );
     }
@@ -61,8 +70,8 @@ pub fn cmd_api(
 
     let mut command_metadata = None;
     let rp = pos_args.first().unwrap();
-    let cmd = match api_manager.read_index(rp) {
-        Ok(index) => {
+    let cmd = match api_manager.index.rps.get(*rp) {
+        Some(rp_meta) => {
             let mut args = pos_args.iter();
             let mut commands = vec![];
 
@@ -71,9 +80,9 @@ pub fn cmd_api(
                 command_groups: Some(HashMap::from([(
                     rp.to_string(),
                     metadata_index::CommandGroup {
-                        help: index.help.clone(),
-                        command_groups: Some(index.command_groups.clone()),
-                        commands: None,
+                        help: rp_meta.help.clone(),
+                        command_groups: rp_meta.command_groups.clone(),
+                        commands: rp_meta.commands.clone(),
                     },
                 )])),
                 help: None,
@@ -121,18 +130,18 @@ pub fn cmd_api(
             );
             if let Some(c) = c {
                 // Construct the last command name as a Command, which contains args
-                match index.locate_command_file(input) {
+                match api_manager.index.locate_command_file(input) {
                     Ok(command_file) => match api_manager.read_command(&command_file) {
                         Ok(command) => {
                             cmd = cmd.args(build_args(&c.versions, &command));
                             command_metadata = Some(command);
                         }
                         Err(err) => {
-                            dbg!("read command failed", err);
+                            tracing::error!("read command failed: {err}");
                         }
                     },
                     Err(err) => {
-                        dbg!("locate command file failed", err);
+                        tracing::error!("locate command file failed: {err}");
                     }
                 }
             } else {
@@ -169,10 +178,7 @@ pub fn cmd_api(
             }
             cmd_base().subcommand(cmd_api_base_real().subcommand(cmd))
         }
-        Err(err) => {
-            dbg!("subcommand construction failed", err);
-            cmd_base().subcommand(cmd_api_base_real().subcommand(Command::new(rp.to_string())))
-        }
+        None => cmd_base().subcommand(cmd_api_base_real()),
     };
     (cmd, command_metadata)
 }

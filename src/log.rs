@@ -51,6 +51,6 @@ fn init_tracing_subscriber() {
 pub fn set_global_logger() {
     INIT.call_once(|| {
         init_tracing_subscriber();
-        tracing::debug!("Global logger initialized");
+        tracing::debug!("Logger initialized");
     });
 }

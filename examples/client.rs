@@ -1,5 +1,5 @@
 use anyhow::Result;
-use azure::client::Client;
+use az_rs::client::Client;
 use azure_core::http::Method::{Delete, Get, Put};
 use azure_identity::DefaultAzureCredential;
 use bytes::Bytes;

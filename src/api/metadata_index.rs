@@ -8,9 +8,8 @@ use crate::arg::CliInput;
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Index {
-    pub help: Option<Help>,
-    #[serde(rename = "commandGroups")]
-    pub command_groups: HashMap<String, CommandGroup>,
+    #[serde(flatten)]
+    pub rps: HashMap<String, CommandGroup>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -51,12 +50,17 @@ impl Index {
         let mut args = args.iter();
 
         // rp
-        parts.push(args.next().unwrap().to_string());
+        let rp_name = args.next().unwrap().to_string();
+        let rp = self
+            .rps
+            .get(&rp_name)
+            .ok_or(anyhow!(r#"unknown rp "{rp_name}""#))?;
+        parts.push(rp_name.clone());
 
         let mut cg = CommandGroup {
-            command_groups: Some(self.command_groups.clone()),
             help: None,
-            commands: None,
+            command_groups: rp.command_groups.clone(),
+            commands: rp.commands.clone(),
         };
 
         while let Some(arg) = args.next() {
@@ -139,33 +143,35 @@ mod test {
     fn deserialize() -> Result<(), Box<dyn Error>> {
         let input = r#"
 {
-  "help": {
-      "short": "rp"
-  },
-  "commandGroups": {
-    "group": {
-      "commands": {
-        "show": {
-          "help": {
-            "short": "show"
-          },
-          "versions": [
-            "2024-11-01"
-          ]
-        },
-        "create": {
-          "help": {
-            "short": "create"
-          },
-          "versions": [
-            "2024-11-01"
-          ]
-        }
-      },
+  "foo": {
       "help": {
-          "short": "command group"
+          "short": "rp"
+      },
+      "commandGroups": {
+        "group": {
+          "commands": {
+            "show": {
+              "help": {
+                "short": "show"
+              },
+              "versions": [
+                "2024-11-01"
+              ]
+            },
+            "create": {
+              "help": {
+                "short": "create"
+              },
+              "versions": [
+                "2024-11-01"
+              ]
+            }
+          },
+          "help": {
+              "short": "command group"
+          }
+        }
       }
-    }
   }
 }
 "#;
