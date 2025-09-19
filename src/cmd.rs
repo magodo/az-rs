@@ -121,7 +121,7 @@ pub fn cmd_api(
             );
             if let Some(c) = c {
                 // Construct the last command name as a Command, which contains args
-                match index.locate_command_file(None, input) {
+                match index.locate_command_file(input) {
                     Ok(command_file) => match api_manager.read_command(&command_file) {
                         Ok(command) => {
                             cmd = cmd.args(build_args(&c.versions, &command));

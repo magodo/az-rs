@@ -37,12 +37,8 @@ pub struct Help {
 
 impl Index {
     // Locate the command file based on the raw CLI input.
-    // Especially, if the api-version is not specified, it defaults to the latest version.
-    pub fn locate_command_file(
-        &self,
-        api_version: Option<String>,
-        input: &CliInput,
-    ) -> Result<String> {
+    // Especially, if the api-version is not specified or can't be found, it defaults to the latest version.
+    pub fn locate_command_file(&self, input: &CliInput) -> Result<String> {
         if input.is_empty() {
             bail!("empty CLI input");
         }
@@ -76,19 +72,16 @@ impl Index {
                 if let Some(arg) = args.next() {
                     return Err(anyhow!("unknown argument {}", arg));
                 } else {
-                    let ver = if let Some(ref version) = api_version {
-                        v.versions
-                            .iter()
-                            .find(|&v| v == version)
-                            .ok_or(anyhow!(r#"api version {} not available"#, version))?
-                    } else {
-                        v.versions
-                            .iter()
-                            .max()
-                            .ok_or(anyhow!("no api version defined"))?
-                    };
+                    let max_version = v
+                        .versions
+                        .iter()
+                        .max()
+                        .ok_or(anyhow!("no api version defined"))?;
+                    let ver = input
+                        .api_version()
+                        .and_then(|version| v.versions.iter().find(|&v| v == &version))
+                        .unwrap_or(max_version);
                     parts.push(ver.to_string());
-
                     return Ok(parts.join("_") + ".json");
                 }
             } else {
