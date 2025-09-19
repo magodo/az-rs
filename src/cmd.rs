@@ -128,11 +128,11 @@ pub fn cmd_api(
                             command_metadata = Some(command);
                         }
                         Err(err) => {
-                            dbg!("read command failed", err);
+                            tracing::error!("read command failed: {err}");
                         }
                     },
                     Err(err) => {
-                        dbg!("locate command file failed", err);
+                        tracing::error!("locate command file failed: {err}");
                     }
                 }
             } else {
@@ -170,8 +170,8 @@ pub fn cmd_api(
             cmd_base().subcommand(cmd_api_base_real().subcommand(cmd))
         }
         Err(err) => {
-            dbg!("subcommand construction failed", err);
-            cmd_base().subcommand(cmd_api_base_real().subcommand(Command::new(rp.to_string())))
+            tracing::error!("subcommand construction failed: {err}");
+            cmd_base().subcommand(cmd_api_base_real())
         }
     };
     (cmd, command_metadata)
