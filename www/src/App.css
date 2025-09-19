@@ -37,7 +37,7 @@
 }
 
 .auth-button-container.unauthenticated {
-  align-items: stretch;
+  align-items: center;
   max-width: 100%;
   min-width: auto;
 }
@@ -45,7 +45,7 @@
 .auth-horizontal-layout {
   display: flex;
   gap: 1.5rem;
-  align-items: flex-end;
+  align-items: center;
   width: 100%;
 }
 
@@ -57,7 +57,7 @@
 .auth-action-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
 }
