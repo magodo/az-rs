@@ -9,17 +9,17 @@ export const AzureCLIInterface: React.FC = () => {
   const [wasmReady, setWasmReady] = useState(false);
   const [initializingWasm, setInitializingWasm] = useState(false);
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
-  
+
   const { account, getAzureManagementToken } = useAzureAuth();
 
   // Initialize WASM module
   useEffect(() => {
     const initializeWasm = async () => {
       if (wasmReady || initializingWasm) return;
-      
+
       setInitializingWasm(true);
       setOutput('Initializing Azure CLI WebAssembly module...');
-      
+
       try {
         const module = await loadWasmModule();
         setWasmModule(module);
@@ -43,10 +43,10 @@ export const AzureCLIInterface: React.FC = () => {
     let current = '';
     let inQuotes = false;
     let quoteChar = '';
-    
+
     for (let i = 0; i < command.length; i++) {
       const char = command[i];
-      
+
       if ((char === '"' || char === "'") && !inQuotes) {
         inQuotes = true;
         quoteChar = char;
@@ -62,19 +62,19 @@ export const AzureCLIInterface: React.FC = () => {
         current += char;
       }
     }
-    
+
     if (current.trim()) {
       args.push(current.trim());
     }
-    
+
     // Remove 'az' prefix if present and ensure 'azure' is the first element
     if (args.length > 0 && args[0] === 'azure') {
       args.shift();
     }
-    
+
     // Always ensure 'azure' is the first element
     args.unshift('azure');
-    
+
     return args;
   };
 
@@ -102,7 +102,7 @@ export const AzureCLIInterface: React.FC = () => {
       const args = parseCliCommand(command);
       console.log('Executing command with args:', args);
 
-      
+
       // Note: For MSAL authentication, we don't have client_id and secret in the traditional sense
       // The WASM module might need to be updated to handle access tokens instead
       // For now, we'll pass the access token as the secret parameter
@@ -126,7 +126,7 @@ export const AzureCLIInterface: React.FC = () => {
     } catch (error) {
       console.error('CLI execution failed:', error);
       let errorMessage = 'CLI execution failed';
-      
+
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
@@ -138,8 +138,8 @@ export const AzureCLIInterface: React.FC = () => {
           errorMessage = error;
         }
       }
-      
-      setOutput(`Error: ${errorMessage}`);
+
+      setOutput(`${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -158,7 +158,7 @@ export const AzureCLIInterface: React.FC = () => {
   return (
     <div className="cli-interface">
       <h2>Azure CLI WebAssembly Interface</h2>
-      
+
       <div className="status-indicators">
         <div className={`status-item ${wasmReady ? 'ready' : 'not-ready'}`}>
           WASM Module: {wasmReady ? 'Ready' : initializingWasm ? 'Initializing...' : 'Not Ready'}
@@ -178,7 +178,7 @@ export const AzureCLIInterface: React.FC = () => {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="help"
+            placeholder="-h"
             disabled={!wasmReady || loading}
             className="cli-input"
           />
