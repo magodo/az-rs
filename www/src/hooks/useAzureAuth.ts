@@ -34,13 +34,14 @@ export const useAzureAuth = () => {
  * Custom hook for checking authentication status
  */
 export const useAuthStatus = () => {
-  const { isAuthenticated, account, loading, error } = useAuth();
+  const { isAuthenticated, account, loading, error, currentTenantId } = useAuth();
 
   return {
     isAuthenticated,
     account,
     loading,
     error,
+    currentTenantId,
     isReady: !loading,
     hasError: !!error,
     userName: account?.name || account?.username,
