@@ -190,7 +190,10 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
     out.push(
         Arg::new("api-version")
             .long("api-version")
-            .help("API version")
+            .help(format!(
+                "API version (default: {})",
+                versions.iter().max().unwrap_or(&"".to_string())
+            ))
             .value_parser(PossibleValuesParser::new(versions)),
     );
     command
