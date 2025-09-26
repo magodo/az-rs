@@ -47,7 +47,7 @@ Follow https://rustwasm.github.io/book/game-of-life/setup.html to setup the Rust
 Then you can build the crate to a WASM by:
 
 ```
-RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --features runtime-web
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web
 ```
 
 (Note that the `RUSTFLAGS` thing is required for the `getrandom` crate)

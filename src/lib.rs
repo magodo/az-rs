@@ -1,9 +1,10 @@
 use anyhow::Result;
 use api::{invoke::CommandInvocation, ApiManager};
 use arg::CliInput;
+use azure_core::credentials::TokenCredential;
 use clap::{ArgMatches, Command};
 use client::Client;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 pub mod api;
 pub mod arg;
@@ -15,11 +16,11 @@ pub mod log;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_exports;
 
-pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<String> {
+pub async fn run<F>(metadata_path: PathBuf, raw_input: Vec<String>, cred_func: F) -> Result<String>
+where
+    F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+{
     tracing::info!("Running CLI with input: {:?}", raw_input);
-
-    let api_manager = ApiManager::new(p)?;
-
     let matches = get_matches(cmd::cmd(), raw_input.clone())?;
 
     match matches.subcommand() {
@@ -30,6 +31,7 @@ pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<
                 vec![]
             };
             let input = CliInput::new(args)?;
+            let api_manager = ApiManager::new(metadata_path)?;
             let (cmd, cmd_metadata) = cmd::cmd_api(&api_manager, &input);
             let mut matches = get_matches(cmd, raw_input.clone())?;
 
@@ -41,6 +43,15 @@ pub async fn run(p: PathBuf, client: &Client, raw_input: Vec<String>) -> Result<
                 matches = m.clone();
             }
             let invoker = CommandInvocation::new(&cmd_metadata, &matches)?;
+
+            let cred = cred_func()?;
+            let client = Client::new(
+                "https://management.azure.com",
+                vec!["https://management.azure.com/.default"],
+                cred,
+                None,
+            )?;
+
             let res = invoker.invoke(&client).await?;
             return Ok(res);
         }

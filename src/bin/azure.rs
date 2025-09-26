@@ -1,28 +1,26 @@
 use anyhow::Result;
-use az_rs::client::Client;
 use az_rs::log::set_global_logger;
 use az_rs::run;
+use azure_core::credentials::TokenCredential;
 use azure_identity::DefaultAzureCredential;
-use std::{env, path::PathBuf, str::FromStr};
+use std::{env, path::PathBuf, str::FromStr, sync::Arc};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     set_global_logger();
 
-    let credential = DefaultAzureCredential::new()?;
-    let client = Client::new(
-        "https://management.azure.com",
-        vec!["https://management.azure.com/.default"],
-        credential,
-        None,
-    )?;
+    let cred_func = || -> Result<Arc<dyn TokenCredential>> {
+        let cred = DefaultAzureCredential::new()?;
+        Ok(cred)
+    };
+
     let res = run(
         PathBuf::from_str("./metadata/metadata")?,
-        &client,
         env::args_os()
             .into_iter()
             .map(|s| s.into_string().unwrap())
             .collect(),
+        cred_func,
     )
     .await?;
     println!("{res}");
