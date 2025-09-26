@@ -5,9 +5,38 @@ use serde::Deserialize;
 pub struct Command {
     #[serde(rename = "argGroups")]
     pub arg_groups: Vec<ArgGroup>,
+    pub conditions: Option<Vec<Condition>>,
     pub operations: Vec<Operation>,
     pub outputs: Option<Vec<Output>>,
     pub resources: Vec<Resource>,
+}
+
+#[cfg_attr(test, derive(serde::Serialize))]
+#[derive(Debug, Clone, Deserialize)]
+pub struct Condition {
+    pub operator: ConditionOperator,
+    pub var: String,
+}
+
+#[cfg_attr(test, derive(serde::Serialize))]
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConditionOperator {
+    pub operators: Option<Vec<ConditionOperator>>,
+    pub operator: Option<Box<ConditionOperator>>,
+    pub arg: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: ConditionOperatorType,
+}
+
+#[cfg_attr(test, derive(serde::Serialize))]
+#[derive(Debug, Copy, Clone, Deserialize)]
+pub enum ConditionOperatorType {
+    #[serde(rename = "hasValue")]
+    HasValue,
+    #[serde(rename = "not")]
+    Not,
+    #[serde(rename = "and")]
+    And,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -348,6 +377,43 @@ mod test {
           }
         }
       ]
+    }
+  ],
+  "conditions": [
+    {
+      "operator": {
+        "operators": [
+          {
+            "arg": "$Path.subscriptionId",
+            "type": "hasValue"
+          },
+          {
+            "operator": {
+              "arg": "$Path.resourceGroupName",
+              "type": "hasValue"
+            },
+            "type": "not"
+          }
+        ],
+        "type": "and"
+      },
+      "var": "$Condition_VirtualNetworks_ListAll"
+    },
+    {
+      "operator": {
+        "operators": [
+          {
+            "arg": "$Path.resourceGroupName",
+            "type": "hasValue"
+          },
+          {
+            "arg": "$Path.subscriptionId",
+            "type": "hasValue"
+          }
+        ],
+        "type": "and"
+      },
+      "var": "$Condition_VirtualNetworks_List"
     }
   ],
   "operations": [
