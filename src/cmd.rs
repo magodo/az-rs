@@ -196,14 +196,24 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             ))
             .value_parser(PossibleValuesParser::new(versions)),
     );
+
+    // Only the default argument group (which contains the path segments) will be considered for required or not.
     command
         .arg_groups
         .iter()
-        .for_each(|ag| out.extend(ag.args.iter().map(build_arg)));
+        .filter(|ag| ag.name == "")
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+
+    command
+        .arg_groups
+        .iter()
+        .filter(|ag| ag.name != "")
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
+
     out
 }
 
-fn build_arg(arg: &metadata_command::Arg) -> Arg {
+fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;
@@ -236,12 +246,16 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
     if let Some(long) = long {
         out = out.long(long);
     }
-    if let Some(required) = arg.required {
-        out = out.required(required);
-    }
     if let Some(help) = &arg.help {
         out = out.help(help.short.clone());
     }
+
+    if handle_required {
+        if let Some(required) = arg.required {
+            out = out.required(required);
+        }
+    }
+
     out
 }
 
