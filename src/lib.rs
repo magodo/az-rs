@@ -44,8 +44,8 @@ where
             }
 
             let mut body = None;
-            if let Some(p) = matches.get_one::<String>("input") {
-                body = Some(get_input(p.as_str())?);
+            if let Some(p) = matches.get_one::<PathBuf>("file") {
+                body = Some(get_file(&p)?);
             }
             let invoker = CommandInvocation::new(&cmd_metadata, &matches, body)?;
 
@@ -79,14 +79,14 @@ pub fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn get_input(p: PathBuf) -> Result<bytes::Bytes> {
-    bail!(r#""--input" is not supported on wasm32"#);
+pub fn get_file(p: &PathBuf) -> Result<bytes::Bytes> {
+    bail!(r#""--file" is not supported on wasm32"#);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_input(p: &str) -> Result<bytes::Bytes> {
-    let input = std::fs::read_to_string(p).context("reading the input from {p}")?;
-    let body = hcl::parse(&input).context("parsing the input as HCL")?;
+pub fn get_file(p: &PathBuf) -> Result<bytes::Bytes> {
+    let input = std::fs::read_to_string(p).context("reading file from {p}")?;
+    let body = hcl::parse(&input).context("parsing the file as HCL")?;
     let v: serde_json::Value = hcl::from_body(body)?;
     Ok(bytes::Bytes::from(v.to_string()))
 }

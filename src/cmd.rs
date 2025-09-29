@@ -197,12 +197,23 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .value_parser(PossibleValuesParser::new(versions)),
     );
 
-    // Build the input arg
+    // Build the file & edit args
     out.push(
-        Arg::new("input")
-            .long("input")
-            .short('i')
-            .help("Path to the input file"),
+        Arg::new("file")
+            .long("file")
+            .short('f')
+            .value_name("PATH")
+            .value_parser(clap::value_parser!(std::path::PathBuf))
+            .conflicts_with("edit")
+            .help("Read request payload from the file"),
+    );
+    out.push(
+        Arg::new("edit")
+            .long("edit")
+            .short('e')
+            .action(clap::ArgAction::SetTrue)
+            .conflicts_with("file")
+            .help("Open default editor to compose request payload"),
     );
 
     // Build the remaining arguments based on the command metadata.
