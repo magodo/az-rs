@@ -20,12 +20,25 @@ pub struct Condition {
 
 #[cfg_attr(test, derive(serde::Serialize))]
 #[derive(Debug, Clone, Deserialize)]
-pub struct ConditionOperator {
-    pub operators: Option<Vec<ConditionOperator>>,
-    pub operator: Option<Box<ConditionOperator>>,
-    pub arg: Option<String>,
-    #[serde(rename = "type")]
-    pub type_: ConditionOperatorType,
+#[serde(untagged)]
+pub enum ConditionOperator {
+    Operators {
+        operators: Vec<ConditionOperator>,
+        #[serde(rename = "type")]
+        type_: ConditionOperatorType,
+    },
+
+    Operator {
+        operator: Box<ConditionOperator>,
+        #[serde(rename = "type")]
+        type_: ConditionOperatorType,
+    },
+
+    Arg {
+        arg: String,
+        #[serde(rename = "type")]
+        type_: ConditionOperatorType,
+    },
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -37,6 +50,8 @@ pub enum ConditionOperatorType {
     Not,
     #[serde(rename = "and")]
     And,
+    #[serde(rename = "or")]
+    Or,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -90,6 +105,7 @@ pub struct Operation {
     #[serde(rename = "operationId")]
     pub operation_id: Option<String>,
     pub http: Option<Http>,
+    pub when: Option<Vec<String>>,
 }
 
 #[cfg_attr(test, derive(serde::Serialize))]
