@@ -12,14 +12,28 @@ use clap::ArgMatches;
 pub struct CommandInvocation {
     command: Command,
     matches: ArgMatches,
+    body: Option<bytes::Bytes>,
 }
 
 impl CommandInvocation {
-    pub fn new(command: &Command, matches: &ArgMatches) -> Result<Self> {
+    pub fn new(
+        command: &Command,
+        matches: &ArgMatches,
+        body: Option<bytes::Bytes>,
+    ) -> Result<Self> {
         Ok(Self {
             command: command.clone(),
             matches: matches.clone(),
+            body,
         })
+    }
+
+    pub async fn invoke(&self, client: &Client) -> Result<String> {
+        let operation = self
+            .select_operation()
+            .ok_or(anyhow!("no operation is selected"))?;
+        let operation_ionvocation = OperationInvocation::new(operation, &self.matches, &self.body);
+        operation_ionvocation.invoke(client).await
     }
 
     fn select_operation(&self) -> Option<&Operation> {
@@ -72,30 +86,24 @@ impl CommandInvocation {
             },
         }
     }
-
-    pub async fn invoke(&self, client: &Client) -> Result<String> {
-        let operation = self
-            .select_operation()
-            .ok_or(anyhow!("no operation is selected"))?;
-        let operation_ionvocation = OperationInvocation::new(operation, &self.matches);
-        operation_ionvocation.invoke(client).await
-    }
 }
 
 struct OperationInvocation {
     operation: Operation,
     matches: ArgMatches,
+    body: Option<bytes::Bytes>,
 }
 
 impl OperationInvocation {
-    pub fn new(operation: &Operation, matches: &ArgMatches) -> Self {
+    pub fn new(operation: &Operation, matches: &ArgMatches, body: &Option<bytes::Bytes>) -> Self {
         Self {
             operation: operation.clone(),
             matches: matches.clone(),
+            body: body.clone(),
         }
     }
 
-    pub async fn invoke(&self, client: &crate::client::Client) -> Result<String> {
+    async fn invoke(&self, client: &crate::client::Client) -> Result<String> {
         if self.operation.http.is_none() {
             bail!(
                 r#"HTTP information not found for operation "{}""#,
@@ -125,7 +133,10 @@ impl OperationInvocation {
         for param in &http.request.query.consts {
             query_pairs.insert(param.name.clone(), param.default.value.clone());
         }
-        let body: Option<bytes::Bytes> = if let Some(body_meta) = &http.request.body {
+
+        let body: Option<bytes::Bytes> = if self.body.is_some() {
+            self.body.clone()
+        } else if let Some(body_meta) = &http.request.body {
             if let Some(schema) = &body_meta.json.schema {
                 self.build_body(schema.clone())?
                     .map(|v| bytes::Bytes::from(v.to_string()))
@@ -135,6 +146,7 @@ impl OperationInvocation {
         } else {
             None
         };
+
         let response = client
             .run(
                 http.request.method.into(),

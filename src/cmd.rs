@@ -197,7 +197,16 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .value_parser(PossibleValuesParser::new(versions)),
     );
 
-    // Only the default argument group (which contains the path segments) will be considered for required or not.
+    // Build the input arg
+    out.push(
+        Arg::new("input")
+            .long("input")
+            .short('i')
+            .help("Path to the input file"),
+    );
+
+    // Build the remaining arguments based on the command metadata.
+    // NOTE: Only the default argument group (which contains the path segments) will be considered for required or not.
     command
         .arg_groups
         .iter()
