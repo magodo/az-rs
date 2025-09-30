@@ -215,8 +215,15 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .conflicts_with("file")
             .help("Open default editor to compose request payload"),
     );
+    out.push(
+        Arg::new("print-cli")
+            .long("print-cli")
+            .action(clap::ArgAction::SetTrue)
+            .help(r#"Print the equivalent CLI command that reproduces the request built from "--edit" or "--file" input, instead of executing it"#),
+    );
 
     // Build the remaining arguments based on the command metadata.
+    // NOTE: Only the top level arg groups are exposed.
     // NOTE: Only the default argument group (which contains the path segments) will be considered for required or not.
     command
         .arg_groups

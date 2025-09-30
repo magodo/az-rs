@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use api::{invoke::CommandInvocation, ApiManager};
+use anyhow::{anyhow, Context, Result};
+use api::{cli_expander::CLIExpander, invoke::OperationInvocation, ApiManager};
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
 use clap::{ArgMatches, Command};
@@ -52,17 +52,28 @@ where
                 None
             };
 
-            // Convert the HCL body to JSON payload
+            // Convert the HCL body to JSON value
             let body = if let Some(hcl_body) = hcl_body {
                 let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
                 let v: serde_json::Value = hcl::from_body(body)?;
-                Some(bytes::Bytes::from(v.to_string()))
+                Some(v)
             } else {
                 None
             };
 
-            let invoker = CommandInvocation::new(&cmd_metadata, &matches, body)?;
+            // Select the operation based on the user's input
+            let operation = cmd_metadata
+                .select_operation(&matches)
+                .ok_or(anyhow!("no operation is selected"))?;
 
+            // Print CLI and quit
+            if matches.get_flag("print-cli") {
+                let expander = CLIExpander::new(&operation, &raw_input, body);
+                return expander.expand();
+            }
+
+            // Invoke the operation
+            let invoker = OperationInvocation::new(operation, &matches, &body);
             let cred = cred_func()?;
             let client = Client::new(
                 "https://management.azure.com",
@@ -70,7 +81,6 @@ where
                 cred,
                 None,
             )?;
-
             let res = invoker.invoke(&client).await?;
             return Ok(res);
         }
