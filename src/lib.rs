@@ -43,10 +43,24 @@ where
                 matches = m.clone();
             }
 
-            let mut body = None;
-            if let Some(p) = matches.get_one::<PathBuf>("file") {
-                body = Some(get_file(&p)?);
-            }
+            // Read the raw HCL body
+            let hcl_body = if let Some(p) = matches.get_one::<PathBuf>("file") {
+                Some(get_file(&p)?)
+            } else if matches.get_flag("edit") {
+                Some(edit("# ...".to_string())?)
+            } else {
+                None
+            };
+
+            // Convert the HCL body to JSON payload
+            let body = if let Some(hcl_body) = hcl_body {
+                let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
+                let v: serde_json::Value = hcl::from_body(body)?;
+                Some(bytes::Bytes::from(v.to_string()))
+            } else {
+                None
+            };
+
             let invoker = CommandInvocation::new(&cmd_metadata, &matches, body)?;
 
             let cred = cred_func()?;
@@ -65,7 +79,7 @@ where
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
+fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
     use anyhow::anyhow;
     use clap::builder::Styles;
     let cmd = cmd.styles(Styles::plain());
@@ -74,19 +88,32 @@ pub fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
+fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
     Ok(cmd.get_matches_from(input))
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn get_file(p: &PathBuf) -> Result<bytes::Bytes> {
+fn get_file(p: &PathBuf) -> Result<String> {
     bail!(r#""--file" is not supported on wasm32"#);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_file(p: &PathBuf) -> Result<bytes::Bytes> {
-    let input = std::fs::read_to_string(p).context("reading file from {p}")?;
-    let body = hcl::parse(&input).context("parsing the file as HCL")?;
-    let v: serde_json::Value = hcl::from_body(body)?;
-    Ok(bytes::Bytes::from(v.to_string()))
+fn get_file(p: &PathBuf) -> Result<String> {
+    std::fs::read_to_string(p).context("reading file from {p}")
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    pub fn edit_js(content: &str) -> &str;
+}
+
+#[cfg(target_arch = "wasm32")]
+fn edit(content: String) -> Result<String> {
+    Ok(edit_js(&content).to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn edit(content: String) -> Result<String> {
+    Ok(edit::edit(&content)?.to_string())
 }
