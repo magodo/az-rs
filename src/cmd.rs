@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::api::cli_expander::Shell;
 use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
@@ -218,7 +219,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
     out.push(
         Arg::new("print-cli")
             .long("print-cli")
-            .action(clap::ArgAction::SetTrue)
+            .value_parser(PossibleValuesParser::new(Shell::variants()))
             .help(r#"Print the equivalent CLI command that reproduces the request built from "--edit" or "--file" input, instead of executing it"#),
     );
 

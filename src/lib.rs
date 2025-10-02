@@ -1,10 +1,14 @@
 use anyhow::{anyhow, Context, Result};
-use api::{cli_expander::CLIExpander, invoke::OperationInvocation, ApiManager};
+use api::{
+    cli_expander::{CLIExpander, Shell},
+    invoke::OperationInvocation,
+    ApiManager,
+};
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
 use clap::{ArgMatches, Command};
 use client::Client;
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 pub mod api;
 pub mod arg;
@@ -43,7 +47,7 @@ where
                 matches = m.clone();
             }
 
-            // Read the raw HCL body
+            // Read the HCL body, if any.
             let hcl_body = if let Some(p) = matches.get_one::<PathBuf>("file") {
                 Some(get_file(&p)?)
             } else if matches.get_flag("edit") {
@@ -51,8 +55,6 @@ where
             } else {
                 None
             };
-
-            // Convert the HCL body to JSON value
             let body = if let Some(hcl_body) = hcl_body {
                 let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
                 let v: serde_json::Value = hcl::from_body(body)?;
@@ -67,8 +69,9 @@ where
                 .ok_or(anyhow!("no operation is selected"))?;
 
             // Print CLI and quit
-            if matches.get_flag("print-cli") {
-                let expander = CLIExpander::new(&operation, &raw_input, body);
+            if let Some(shell) = matches.get_one::<String>("print-cli") {
+                let shell = Shell::from_str(shell.as_str())?;
+                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, &raw_input, body);
                 return expander.expand();
             }
 
@@ -109,7 +112,7 @@ fn get_file(p: &PathBuf) -> Result<String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn get_file(p: &PathBuf) -> Result<String> {
-    std::fs::read_to_string(p).context("reading file from {p}")
+    std::fs::read_to_string(p).context(format!("reading file from {p:?}"))
 }
 
 #[cfg(target_arch = "wasm32")]
