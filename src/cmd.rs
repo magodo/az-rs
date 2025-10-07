@@ -220,7 +220,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         Arg::new("print-cli")
             .long("print-cli")
             .value_parser(PossibleValuesParser::new(Shell::variants()))
-            .help(r#"Print the equivalent CLI command that reproduces the request built from "--edit" or "--file" input, instead of executing it"#),
+            .help(r#"Print the equivalent CLI command built from "--edit" or "--file", instead of executing it"#),
     );
 
     // Build the remaining arguments based on the command metadata.
