@@ -106,8 +106,8 @@ fn get_matches(cmd: Command, input: Vec<String>) -> Result<ArgMatches> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn get_file(p: &PathBuf) -> Result<String> {
-    bail!(r#""--file" is not supported on wasm32"#);
+fn get_file(_: &PathBuf) -> Result<String> {
+    Err(anyhow!(r#""--file" is not supported on wasm32"#))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -116,14 +116,8 @@ fn get_file(p: &PathBuf) -> Result<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-extern "C" {
-    pub fn edit_js(content: &str) -> &str;
-}
-
-#[cfg(target_arch = "wasm32")]
-fn edit(content: String) -> Result<String> {
-    Ok(edit_js(&content).to_string())
+fn edit(_: String) -> Result<String> {
+    Err(anyhow!(r#""--edit" is not supported on wasm32"#))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
