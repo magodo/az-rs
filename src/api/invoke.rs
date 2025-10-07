@@ -1,97 +1,25 @@
+use super::metadata_command::{Operation, Schema};
+use anyhow::{bail, Result};
+use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
 
-use crate::client::Client;
-
-use super::metadata_command::{
-    Command, ConditionOperator, ConditionOperatorType, Operation, Schema,
-};
-use anyhow::{anyhow, bail, Result};
-use clap::ArgMatches;
-
-pub struct CommandInvocation {
-    command: Command,
-    matches: ArgMatches,
-}
-
-impl CommandInvocation {
-    pub fn new(command: &Command, matches: &ArgMatches) -> Result<Self> {
-        Ok(Self {
-            command: command.clone(),
-            matches: matches.clone(),
-        })
-    }
-
-    fn select_operation(&self) -> Option<&Operation> {
-        if self.command.conditions.is_none() {
-            return self.command.operations.first();
-        }
-
-        let matched_condition = self
-            .command
-            .conditions
-            .as_ref()
-            .unwrap()
-            .iter()
-            .find(|&c| self.match_operator(&c.operator))
-            .map(|c| c.var.clone())?;
-
-        self.command.operations.iter().find(|op| {
-            op.when
-                .clone()
-                .unwrap_or(vec![])
-                .iter()
-                .any(|w| w == &matched_condition)
-        })
-    }
-
-    fn match_operator(&self, operator: &ConditionOperator) -> bool {
-        match operator {
-            ConditionOperator::Operators { operators, type_ } => match type_ {
-                ConditionOperatorType::Not | ConditionOperatorType::HasValue => unreachable!(
-                    r#"operators' condition type can only be "and" or "or", got=%{type_:?}"#
-                ),
-                ConditionOperatorType::And => operators.iter().all(|o| self.match_operator(o)),
-                ConditionOperatorType::Or => operators.iter().any(|o| self.match_operator(o)),
-            },
-            ConditionOperator::Operator { operator, type_ } => match type_ {
-                ConditionOperatorType::Not => !self.match_operator(operator),
-                ConditionOperatorType::HasValue
-                | ConditionOperatorType::And
-                | ConditionOperatorType::Or => {
-                    unreachable!(r#"operators' condition type can only be "not", got=%{type_:?}"#)
-                }
-            },
-            ConditionOperator::Arg { arg, type_ } => match type_ {
-                ConditionOperatorType::HasValue => self.matches.get_raw(arg).is_some(),
-                ConditionOperatorType::Not
-                | ConditionOperatorType::And
-                | ConditionOperatorType::Or => unreachable!(
-                    r#"operators' condition type can only be "hasValue", got=%{type_:?}"#
-                ),
-            },
-        }
-    }
-
-    pub async fn invoke(&self, client: &Client) -> Result<String> {
-        let operation = self
-            .select_operation()
-            .ok_or(anyhow!("no operation is selected"))?;
-        let operation_ionvocation = OperationInvocation::new(operation, &self.matches);
-        operation_ionvocation.invoke(client).await
-    }
-}
-
-struct OperationInvocation {
+pub struct OperationInvocation {
     operation: Operation,
     matches: ArgMatches,
+    body: Option<serde_json::Value>,
 }
 
 impl OperationInvocation {
-    pub fn new(operation: &Operation, matches: &ArgMatches) -> Self {
+    pub fn new(
+        operation: &Operation,
+        matches: &ArgMatches,
+        body: &Option<serde_json::Value>,
+    ) -> Self {
         Self {
             operation: operation.clone(),
             matches: matches.clone(),
+            body: body.clone(),
         }
     }
 
@@ -125,16 +53,20 @@ impl OperationInvocation {
         for param in &http.request.query.consts {
             query_pairs.insert(param.name.clone(), param.default.value.clone());
         }
-        let body: Option<bytes::Bytes> = if let Some(body_meta) = &http.request.body {
+
+        let body = if self.body.is_some() {
+            self.body.clone()
+        } else if let Some(body_meta) = &http.request.body {
             if let Some(schema) = &body_meta.json.schema {
                 self.build_body(schema.clone())?
-                    .map(|v| bytes::Bytes::from(v.to_string()))
             } else {
                 None
             }
         } else {
             None
-        };
+        }
+        .map(|v| bytes::Bytes::from(v.to_string()));
+
         let response = client
             .run(
                 http.request.method.into(),

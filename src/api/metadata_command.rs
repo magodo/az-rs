@@ -1,3 +1,4 @@
+use clap::ArgMatches;
 use serde::Deserialize;
 
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -276,6 +277,62 @@ pub struct AdditionalPropSchema {
 pub struct AdditionalPropItemSchema {
     #[serde(rename = "type")]
     pub type_: String,
+}
+
+impl Command {
+    pub fn select_operation(&self, matches: &ArgMatches) -> Option<&Operation> {
+        if self.conditions.is_none() {
+            return self.operations.first();
+        }
+
+        let matched_condition = self
+            .conditions
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|&c| self.match_operator(&c.operator, matches))
+            .map(|c| c.var.clone())?;
+
+        self.operations.iter().find(|op| {
+            op.when
+                .clone()
+                .unwrap_or(vec![])
+                .iter()
+                .any(|w| w == &matched_condition)
+        })
+    }
+
+    fn match_operator(&self, operator: &ConditionOperator, matches: &ArgMatches) -> bool {
+        match operator {
+            ConditionOperator::Operators { operators, type_ } => match type_ {
+                ConditionOperatorType::Not | ConditionOperatorType::HasValue => unreachable!(
+                    r#"operators' condition type can only be "and" or "or", got=%{type_:?}"#
+                ),
+                ConditionOperatorType::And => {
+                    operators.iter().all(|o| self.match_operator(o, matches))
+                }
+                ConditionOperatorType::Or => {
+                    operators.iter().any(|o| self.match_operator(o, matches))
+                }
+            },
+            ConditionOperator::Operator { operator, type_ } => match type_ {
+                ConditionOperatorType::Not => !self.match_operator(operator, matches),
+                ConditionOperatorType::HasValue
+                | ConditionOperatorType::And
+                | ConditionOperatorType::Or => {
+                    unreachable!(r#"operators' condition type can only be "not", got=%{type_:?}"#)
+                }
+            },
+            ConditionOperator::Arg { arg, type_ } => match type_ {
+                ConditionOperatorType::HasValue => matches.get_raw(arg).is_some(),
+                ConditionOperatorType::Not
+                | ConditionOperatorType::And
+                | ConditionOperatorType::Or => unreachable!(
+                    r#"operators' condition type can only be "hasValue", got=%{type_:?}"#
+                ),
+            },
+        }
+    }
 }
 
 #[cfg(test)]

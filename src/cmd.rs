@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::api::cli_expander::Shell;
 use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
@@ -196,14 +197,51 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             ))
             .value_parser(PossibleValuesParser::new(versions)),
     );
+
+    // Build the file & edit args
+    out.push(
+        Arg::new("file")
+            .long("file")
+            .short('f')
+            .value_name("PATH")
+            .value_parser(clap::value_parser!(std::path::PathBuf))
+            .conflicts_with("edit")
+            .help("Read request payload from the file"),
+    );
+    out.push(
+        Arg::new("edit")
+            .long("edit")
+            .short('e')
+            .action(clap::ArgAction::SetTrue)
+            .conflicts_with("file")
+            .help("Open default editor to compose request payload"),
+    );
+    out.push(
+        Arg::new("print-cli")
+            .long("print-cli")
+            .value_parser(PossibleValuesParser::new(Shell::variants()))
+            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with `--file` or `--edit`"#),
+    );
+
+    // Build the remaining arguments based on the command metadata.
+    // NOTE: Only the top level arg groups are exposed.
+    // NOTE: Only the default argument group (which contains the path segments) will be considered for required or not.
     command
         .arg_groups
         .iter()
-        .for_each(|ag| out.extend(ag.args.iter().map(build_arg)));
+        .filter(|ag| ag.name == "")
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+
+    command
+        .arg_groups
+        .iter()
+        .filter(|ag| ag.name != "")
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
+
     out
 }
 
-fn build_arg(arg: &metadata_command::Arg) -> Arg {
+fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;
@@ -236,12 +274,16 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
     if let Some(long) = long {
         out = out.long(long);
     }
-    if let Some(required) = arg.required {
-        out = out.required(required);
-    }
     if let Some(help) = &arg.help {
         out = out.help(help.short.clone());
     }
+
+    if handle_required {
+        if let Some(required) = arg.required {
+            out = out.required(required);
+        }
+    }
+
     out
 }
 

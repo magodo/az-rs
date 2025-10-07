@@ -1,5 +1,6 @@
 use metadata_index::Index;
 use std::path::PathBuf;
+pub mod cli_expander;
 pub mod invoke;
 pub mod metadata_command;
 pub mod metadata_index;
