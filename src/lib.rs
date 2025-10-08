@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use api::{
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
@@ -48,13 +48,23 @@ where
             }
 
             // Read the HCL body, if any.
-            let hcl_body = if let Some(p) = matches.get_one::<PathBuf>("file") {
-                Some(get_file(&p)?)
+            let mut hcl_body = None;
+            if let Some(p) = matches.get_one::<PathBuf>("file") {
+                hcl_body = Some(get_file(&p)?);
             } else if matches.get_flag("edit") {
-                Some(edit("# ...".to_string())?)
-            } else {
-                None
-            };
+                let header = "# ...".to_string();
+                let content = edit(&header)?;
+                let content = content.trim();
+
+                // If the content is "empty", pause the process and exit.
+                // This behavior is similar to "git commit".
+                if content == header || content.is_empty() {
+                    bail!("Aborting due to empty body");
+                }
+
+                hcl_body = Some(content.to_string());
+            }
+
             let body = if let Some(hcl_body) = hcl_body {
                 let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
                 let v: serde_json::Value = hcl::from_body(body)?;
@@ -116,11 +126,11 @@ fn get_file(p: &PathBuf) -> Result<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn edit(_: String) -> Result<String> {
+fn edit(_: &String) -> Result<String> {
     Err(anyhow!(r#""--edit" is not supported on wasm32"#))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn edit(content: String) -> Result<String> {
-    Ok(edit::edit(&content)?.to_string())
+fn edit(content: &String) -> Result<String> {
+    Ok(edit::edit(content)?.to_string())
 }
