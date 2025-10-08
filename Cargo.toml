@@ -1,60 +1,19 @@
 [package]
 name = "az-rs"
-description = "Azure CLI written in Rust"
-license = "MIT"
 version = "0.1.0"
 edition = "2024"
+description = "Azure CLI written in Rust"
+license = "MIT"
 exclude = [
-    "/target/*",
-    "/www/*",
-    "/examples/*",
-    "/metadata/*",
-    "/pkg/*",
+  "/examples/*",
+  "/metadata/*",
+  "/pkg/*",
+  "/target/*",
+  "/www/*",
 ]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-
-[features]
-embed-api = [
-    "dep:rust-embed",
-]
-
-[dependencies]
-anyhow = "1.0.98"
-azure_core = "0.27.0"
-azure_identity = "0.27.0"
-bytes = "1.10.1"
-chrono = "0.4.41"
-clap = { version = "4.5.40", features = ["derive", "cargo", "string"] }
-serde = "1.0.219"
-serde_json = "1.0.140"
-async-trait = "0.1.89"
-
-tracing = "0.1"
-tracing-subscriber = "0.3"
-hcl-rs = "0.19.2"
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-rust-embed = { version = "8.7.2", features = ["debug-embed"] }
-wasm-bindgen = { version = "0.2.100" }
-wasm-bindgen-futures = { version = "0.4.50" }
-console_error_panic_hook = { version = "0.1.7" }
-tracing-web = { version = "0.1" }
-getrandom = { version = "0.3", features = ["wasm_js"] }
-typespec_client_core = { version = "0.7.0", features = ["wasm_bindgen"] }
-uuid = { version = "1", features = ["v4", "js"] }
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.45.1" }
-typespec_client_core = { version = "0.7.0", features = ["tokio"] }
-uuid = { version = "1", features = ["v4"] }
-rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
-edit = "0.1.5"
-
-[dev-dependencies]
-pretty_assertions = "1.4.1"
-tokio = { version = "1.45.1" }
 
 [[bin]]
 name = "azure"
@@ -63,3 +22,44 @@ path = "src/bin/azure.rs"
 [[example]]
 name = "client"
 path = "examples/client.rs"
+
+[dependencies]
+anyhow = "1.0.98"
+async-trait = "0.1.89"
+azure_core = "0.27.0"
+azure_identity = "0.27.0"
+bytes = "1.10.1"
+chrono = "0.4.41"
+clap = { version = "4.5.40", features = ["cargo", "derive", "string"] }
+hcl-rs = "0.19.2"
+serde = "1.0.219"
+serde_json = "1.0.140"
+tower-lsp = "0.20.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+tokio = { version = "1.45.1" }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+edit = "0.1.5"
+rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
+tokio = { version = "1.45.1", features = ["io-std"] }
+typespec_client_core = { version = "0.7.0", features = ["tokio"] }
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+console_error_panic_hook = { version = "0.1.7" }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+rust-embed = { version = "8.7.2", features = ["debug-embed"] }
+tracing-web = { version = "0.1" }
+typespec_client_core = { version = "0.7.0", features = ["wasm_bindgen"] }
+uuid = { version = "1", features = ["js", "v4"] }
+wasm-bindgen = { version = "0.2.100" }
+wasm-bindgen-futures = { version = "0.4.50" }
+
+[features]
+embed-api = [
+  "dep:rust-embed",
+]

@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use api::{
+    ApiManager,
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
-    ApiManager,
 };
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
@@ -16,6 +16,7 @@ pub mod azidentityext;
 pub mod client;
 pub mod cmd;
 pub mod log;
+pub mod lsp;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_exports;
