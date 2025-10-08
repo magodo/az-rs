@@ -1,5 +1,8 @@
+use anyhow::Result;
 use metadata_index::Index;
 use std::path::PathBuf;
+
+use crate::arg::CliInput;
 pub mod cli_expander;
 pub mod invoke;
 pub mod metadata_command;
@@ -10,6 +13,17 @@ pub struct ApiManager {
     pub index: Index,
     #[allow(dead_code)]
     commands_path: PathBuf,
+}
+
+impl ApiManager {
+    pub fn locate_command_file(&self, input: &CliInput) -> Result<String> {
+        self.index.locate_command_file(input)
+    }
+
+    pub fn locate_command_metadata(&self, input: &CliInput) -> Result<metadata_command::Command> {
+        let command_file = self.locate_command_file(input)?;
+        self.read_command(&command_file)
+    }
 }
 
 #[cfg(any(feature = "embed-api", target_arch = "wasm32"))]
