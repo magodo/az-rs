@@ -39,10 +39,7 @@ pub fn cmd_api_base() -> Command {
 
 // cmd_api parses the raw CLI args for `api` subcommand, returns a precise clap::Command and
 // a potential Command metadata (if the raw CLI args ends to a command).
-pub fn cmd_api(
-    api_manager: &ApiManager,
-    input: &CliInput,
-) -> (Command, Option<metadata_command::Command>) {
+pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
     let pos_args = input.pos_args();
 
     // No positional argument specified, list the rps
@@ -50,18 +47,15 @@ pub fn cmd_api(
         let rps = &api_manager.index.rps;
         let mut keys: Vec<_> = rps.keys().collect();
         keys.sort();
-        return (
-            cmd_base().subcommand(cmd_api_base_real().subcommands(keys.iter().map(|k| {
-                Command::new(*k).about(
-                    rps.get(k.as_str())
-                        .unwrap()
-                        .help
-                        .as_ref()
-                        .map_or("".to_string(), |v| v.short.clone()),
-                )
-            }))),
-            None,
-        );
+        return cmd_base().subcommand(cmd_api_base_real().subcommands(keys.iter().map(|k| {
+            Command::new(*k).about(
+                rps.get(k.as_str())
+                    .unwrap()
+                    .help
+                    .as_ref()
+                    .map_or("".to_string(), |v| v.short.clone()),
+            )
+        })));
     }
 
     struct CommandDesc {
@@ -69,7 +63,6 @@ pub fn cmd_api(
         help: Option<metadata_index::Help>,
     }
 
-    let mut command_metadata = None;
     let rp = pos_args.first().unwrap();
     let cmd = match api_manager.index.rps.get(*rp) {
         Some(rp_meta) => {
@@ -135,7 +128,6 @@ pub fn cmd_api(
                     Ok(command_file) => match api_manager.read_command(&command_file) {
                         Ok(command) => {
                             cmd = cmd.args(build_args(&c.versions, &command));
-                            command_metadata = Some(command);
                         }
                         Err(err) => {
                             tracing::error!("read command failed: {err}");
@@ -181,7 +173,7 @@ pub fn cmd_api(
         }
         None => cmd_base().subcommand(cmd_api_base_real()),
     };
-    (cmd, command_metadata)
+    cmd
 }
 
 fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Vec<Arg> {

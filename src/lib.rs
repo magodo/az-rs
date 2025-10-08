@@ -36,11 +36,11 @@ where
             };
             let input = CliInput::new(args)?;
             let api_manager = ApiManager::new(metadata_path)?;
-            let (cmd, cmd_metadata) = cmd::cmd_api(&api_manager, &input);
+            let cmd = cmd::cmd_api(&api_manager, &input);
             let mut matches = get_matches(cmd, raw_input.clone())?;
 
             // Reaches here indicates an API command/operation is specified.
-            let cmd_metadata = cmd_metadata.unwrap();
+            let cmd_metadata = api_manager.locate_command_metadata(&input)?;
 
             // Match the subcommand to the end, which returns the matches for the last subcommand.
             while let Some((_, m)) = matches.subcommand() {
