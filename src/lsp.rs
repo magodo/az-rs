@@ -4,7 +4,7 @@ pub mod backend;
 
 pub async fn serve() {
     tracing::info!(
-        "Az Language Server version \"{}\" will start.",
+        "Az Language Server version \"{}\" starts.",
         env!("CARGO_PKG_VERSION")
     );
 

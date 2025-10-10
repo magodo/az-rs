@@ -1,8 +1,8 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use api::{
-    ApiManager,
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
+    ApiManager,
 };
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
@@ -31,6 +31,12 @@ where
     let matches = get_matches(cmd::cmd(), raw_input.clone())?;
 
     match matches.subcommand() {
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(("lsp", _)) => {
+            lsp::serve().await;
+            Ok("".to_string())
+        }
+
         Some(("api", matches)) => {
             let args = if let Some(args) = matches.get_many::<String>("args") {
                 args.cloned().collect()

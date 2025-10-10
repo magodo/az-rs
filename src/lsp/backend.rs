@@ -1,13 +1,14 @@
 use tower_lsp::{
+    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse, Hover,
         HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, MarkedString, MessageType, ServerCapabilities,
     },
-    Client, LanguageServer,
 };
 
+#[derive(Debug)]
 pub struct Backend {
     client: Client,
 }
@@ -20,8 +21,8 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        tracing::debug!("initialize");
         tracing::trace!(?params);
 
         let InitializeParams { client_info, .. } = params;
@@ -41,16 +42,19 @@ impl LanguageServer for Backend {
         })
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn initialized(&self, _: InitializedParams) {
         self.client
             .log_message(MessageType::INFO, "server initialized!")
             .await;
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
         Ok(Some(CompletionResponse::Array(vec![
             CompletionItem::new_simple("Hello".to_string(), "Some detail".to_string()),
@@ -58,6 +62,7 @@ impl LanguageServer for Backend {
         ])))
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String("You're hovering!".to_string())),

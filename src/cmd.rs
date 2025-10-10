@@ -7,7 +7,10 @@ use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
 pub fn cmd() -> Command {
-    cmd_base().subcommand(cmd_api_stub())
+    cmd_base().subcommands([
+        Command::new("lsp").about("Start the LSP server."),
+        cmd_api_stub(),
+    ])
 }
 
 fn cmd_base() -> Command {
