@@ -141,5 +141,5 @@ fn edit(_: &String) -> Result<String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn edit(content: &String) -> Result<String> {
-    Ok(edit::edit(content)?.to_string())
+    Ok(edit::edit_with_builder(content, tempfile::Builder::new().suffix(".az"))?.to_string())
 }
