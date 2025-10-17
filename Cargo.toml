@@ -40,6 +40,8 @@ tempfile = "3.23.0"
 tower-lsp = "0.20.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
+oauth2 = { version = "5.0.0", default-features = false }
+webbrowser = "1.0.5"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

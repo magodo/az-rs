@@ -1,6 +1,23 @@
 static INIT: std::sync::Once = std::sync::Once::new();
 
 #[allow(dead_code)]
+fn get_log_level() -> tracing_subscriber::filter::LevelFilter {
+    use tracing_subscriber::filter::LevelFilter;
+
+    match std::env::var("AZURE_LOG").as_deref() {
+        Ok(level) => match level.to_lowercase().as_str() {
+            "trace" => LevelFilter::TRACE,
+            "debug" => LevelFilter::DEBUG,
+            "info" => LevelFilter::INFO,
+            "warn" => LevelFilter::WARN,
+            "error" => LevelFilter::ERROR,
+            "off" => LevelFilter::OFF,
+            _ => LevelFilter::OFF, // default level
+        },
+        _ => LevelFilter::TRACE, // default level
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn init_tracing_subscriber() {
     use std::io;
