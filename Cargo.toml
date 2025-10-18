@@ -44,7 +44,8 @@ pretty_assertions = "1.4.1"
 tokio = { version = "1.45.1" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-edit = "0.1.5"
+#edit = "0.1.5"
+edit = { git = 'https://github.com/magodo/edit-rs.git', branch = 'env' }
 rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
 tokio = { version = "1.45.1", features = ["io-std"] }
 typespec_client_core = { version = "0.7.0", features = ["tokio"] }

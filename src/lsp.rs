@@ -1,6 +1,10 @@
+use std::env;
+
 use backend::Backend;
 
 pub mod backend;
+
+pub const LSP_CMD_METADATA_VAR: &str = "AZURE_CMD_METADATA";
 
 pub async fn serve() {
     tracing::info!(
@@ -11,7 +15,12 @@ pub async fn serve() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = tower_lsp::LspService::build(|client| Backend::new(client)).finish();
+    let cmd_json = env::var(LSP_CMD_METADATA_VAR)
+        .expect(format!(r#"environment variable "{LSP_CMD_METADATA_VAR}""#).as_str());
+    let cmd = serde_json::from_str(&cmd_json).expect(r#"decode command metadata from JSON"#);
+
+    let (service, socket) =
+        tower_lsp::LspService::build(|client| Backend::new(client, cmd)).finish();
 
     tower_lsp::Server::new(stdin, stdout, socket)
         .serve(service)

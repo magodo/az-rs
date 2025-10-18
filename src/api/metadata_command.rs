@@ -1,8 +1,7 @@
 use clap::ArgMatches;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, Serialize)]
 pub struct Command {
     #[serde(rename = "argGroups")]
     pub arg_groups: Vec<ArgGroup>,
@@ -12,15 +11,13 @@ pub struct Command {
     pub resources: Vec<Resource>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Condition {
     pub operator: ConditionOperator,
     pub var: String,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ConditionOperator {
     Operators {
@@ -42,8 +39,7 @@ pub enum ConditionOperator {
     },
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum ConditionOperatorType {
     #[serde(rename = "hasValue")]
     HasValue,
@@ -55,15 +51,13 @@ pub enum ConditionOperatorType {
     Or,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Resource {
     pub id: String,
     pub plane: Plane,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum Plane {
     #[serde(rename = "mgmt-plane")]
     Mgmt,
@@ -71,15 +65,13 @@ pub enum Plane {
     Data,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ArgGroup {
     pub name: String,
     pub args: Vec<Arg>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Arg {
     #[serde(rename = "type")]
     pub type_: String,
@@ -94,14 +86,12 @@ pub struct Arg {
     pub additional_props: Option<AdditionalPropSchema>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Help {
     pub short: String,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Operation {
     #[serde(rename = "operationId")]
     pub operation_id: Option<String>,
@@ -109,16 +99,14 @@ pub struct Operation {
     pub when: Option<Vec<String>>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Http {
     pub path: String,
     pub request: Request,
     pub responses: Vec<Response>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Request {
     pub method: Method,
     pub path: RequestPath,
@@ -126,8 +114,7 @@ pub struct Request {
     pub body: Option<Body>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Method {
     Head,
@@ -151,14 +138,12 @@ impl From<Method> for azure_core::http::Method {
     }
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestPath {
     pub params: Vec<RequestPathParam>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestPathParam {
     #[serde(rename = "type")]
     pub type_: String,
@@ -168,8 +153,7 @@ pub struct RequestPathParam {
     pub format: Option<RequestFormat>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestFormat {
     pub pattern: Option<String>,
     #[serde(rename = "maxLength")]
@@ -178,20 +162,17 @@ pub struct RequestFormat {
     pub min_length: Option<i64>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResponseFormat {
     pub template: Option<String>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestQuery {
     pub consts: Vec<RequestQueryConst>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestQueryConst {
     pub name: String,
     #[serde(rename = "type")]
@@ -204,20 +185,17 @@ pub struct RequestQueryConst {
     pub default: DefaultValue,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DefaultValue {
     pub value: String,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Body {
     pub json: BodyJSON,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BodyJSON {
     pub schema: Option<Schema>,
     // Only applies for response body
@@ -226,8 +204,7 @@ pub struct BodyJSON {
     pub ref_: Option<String>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Response {
     #[serde(rename = "statusCode")]
     pub status_code: Option<Vec<i64>>,
@@ -236,8 +213,7 @@ pub struct Response {
     pub is_error: Option<bool>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Output {
     #[serde(rename = "type")]
     pub type_: String,
@@ -247,8 +223,7 @@ pub struct Output {
     pub client_flatten: Option<bool>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Schema {
     #[serde(rename = "type")]
     pub type_: String,
@@ -266,14 +241,12 @@ pub struct Schema {
     pub additional_props: Option<AdditionalPropSchema>,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AdditionalPropSchema {
     pub item: AdditionalPropItemSchema,
 }
 
-#[cfg_attr(test, derive(serde::Serialize))]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AdditionalPropItemSchema {
     #[serde(rename = "type")]
     pub type_: String,

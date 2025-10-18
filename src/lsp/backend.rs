@@ -1,21 +1,24 @@
 use tower_lsp::{
-    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse, Hover,
         HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, MarkedString, MessageType, ServerCapabilities,
     },
+    Client, LanguageServer,
 };
+
+use crate::api::metadata_command::Command;
 
 #[derive(Debug)]
 pub struct Backend {
     client: Client,
+    cmd: Command,
 }
 
 impl Backend {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(client: Client, cmd: Command) -> Self {
+        Self { client, cmd }
     }
 }
 

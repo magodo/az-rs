@@ -62,7 +62,8 @@ where
                 hcl_body = Some(get_file(&p)?);
             } else if matches.get_flag("edit") {
                 let header = "# ...".to_string();
-                let content = edit(&header)?;
+                let cmd_json = serde_json::to_string(&cmd_metadata)?;
+                let content = edit(&header, &cmd_json)?;
                 let content = content.trim();
 
                 // If the content is "empty", pause the process and exit.
@@ -135,11 +136,16 @@ fn get_file(p: &PathBuf) -> Result<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn edit(_: &String) -> Result<String> {
+fn edit(_: &String, _: &String) -> Result<String> {
     Err(anyhow!(r#""--edit" is not supported on wasm32"#))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn edit(content: &String) -> Result<String> {
-    Ok(edit::edit_with_builder(content, tempfile::Builder::new().suffix(".az"))?.to_string())
+fn edit(content: &String, cmd_metadata: &String) -> Result<String> {
+    Ok(edit::edit_with_builder_with_env(
+        content,
+        tempfile::Builder::new().suffix(".az"),
+        std::collections::HashMap::from([(lsp::LSP_CMD_METADATA_VAR, cmd_metadata)]),
+    )?
+    .to_string())
 }

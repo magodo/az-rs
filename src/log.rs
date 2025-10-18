@@ -3,9 +3,8 @@ static INIT: std::sync::Once = std::sync::Once::new();
 #[allow(dead_code)]
 #[cfg(not(target_arch = "wasm32"))]
 fn init_tracing_subscriber() {
-    use std::env;
-    use std::fs::File;
     use std::io;
+    use std::{env, fs};
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_env("AZURE_LOG").unwrap_or_else(|_| EnvFilter::from("off"));
@@ -15,7 +14,11 @@ fn init_tracing_subscriber() {
 
     match env::var("AZURE_LOG_PATH") {
         Ok(p) => {
-            let f = File::create(p).expect("failed to create the log file");
+            let f = fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(p)
+                .expect("open log file");
             b.with_writer(f).init();
         }
         Err(_) => {
