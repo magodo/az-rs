@@ -57,8 +57,9 @@ impl OperationInvocation {
         let body = if self.body.is_some() {
             self.body.clone()
         } else if let Some(body_meta) = &http.request.body {
+            let bb = BodyBuilder(&self.matches);
             if let Some(schema) = &body_meta.json.schema {
-                self.build_body(schema.clone())?
+                Some(bb.build_body(schema)?)
             } else {
                 None
             }
@@ -89,30 +90,34 @@ impl OperationInvocation {
             String::from_utf8_lossy(&response.body)
         );
     }
+}
 
-    fn build_body(&self, schema: Schema) -> Result<Option<serde_json::Value>> {
+struct BodyBuilder<'a>(&'a ArgMatches);
+
+impl<'a> BodyBuilder<'a> {
+    pub fn build_body(&self, schema: &Schema) -> Result<serde_json::Value> {
         if let Some(props) = &schema.props {
             let mut map = serde_json::Map::new();
             for prop in props {
                 if let Some(prop_name) = &prop.name {
-                    let value = self.build_value(prop.clone())?;
+                    let value = self.build_value(prop)?;
                     if let Some(value) = value {
                         map.insert(prop_name.clone(), value);
                     }
                 } else {
-                    bail!(r#"property lacks the "name" in the schema"#,);
+                    bail!(r#"property {prop:#?} lacks the "name" in the schema"#,);
                 }
             }
-            return Ok(Some(serde_json::Value::Object(map)));
+            return Ok(serde_json::Value::Object(map));
         }
-        bail!(r#"schema lacks the "props" in the schema"#);
+        bail!(r#"schema lacks the top level "props" in the schema"#);
     }
 
-    fn build_value(&self, schema: Schema) -> Result<Option<serde_json::Value>> {
+    fn build_value(&self, schema: &Schema) -> Result<Option<serde_json::Value>> {
         match schema.type_.as_str() {
             "object" => {
                 if let Some(arg) = &schema.arg {
-                    if let Some(value) = self.matches.get_one::<String>(arg) {
+                    if let Some(value) = self.0.get_one::<String>(arg) {
                         Ok(Some(serde_json::from_str(value)?))
                     } else {
                         Ok(None)
@@ -121,12 +126,12 @@ impl OperationInvocation {
                     let mut map = serde_json::Map::new();
                     for prop in props {
                         if let Some(prop_name) = &prop.name {
-                            let value = self.build_value(prop.clone())?;
+                            let value = self.build_value(prop)?;
                             if let Some(value) = value {
                                 map.insert(prop_name.clone(), value);
                             }
                         } else {
-                            bail!(r#"property lacks the "name" in the schema"#,);
+                            bail!(r#"property {prop:#?} lacks the "name" in the schema"#,);
                         }
                     }
                     if map.is_empty() {
@@ -135,71 +140,159 @@ impl OperationInvocation {
                         Ok(Some(serde_json::Value::Object(map)))
                     }
                 } else {
-                    bail!(r#"object schema lacks both the "arg" and "props" in the schema"#);
+                    bail!(r#"schema {schema:#?} lacks both the "arg" and "props""#);
                 }
             }
-            s if s.starts_with("array") || s == "string" => {
+            "string" => {
                 if let Some(arg) = &schema.arg {
-                    if let Some(value) = self.matches.get_one::<String>(arg) {
-                        Ok(Some(serde_json::from_str(value)?))
+                    if let Some(value) = self.0.get_one::<String>(arg) {
+                        Ok(Some((value.clone()).into()))
                     } else {
                         Ok(None)
                     }
                 } else {
-                    bail!(
-                        r#"schema "{}" lacks the "arg" in the schema"#,
-                        schema.name.unwrap_or("".to_string())
-                    );
+                    bail!(r#"schema "{schema:#?}" lacks the "arg" in the schema"#);
                 }
             }
-            s if s.starts_with("integer") => {
-                if let Some(arg) = &schema.arg {
-                    if let Some(value) = self.matches.get_one::<i32>(arg) {
-                        Ok(Some((*value).into()))
-                    } else {
-                        Ok(None)
-                    }
-                } else {
-                    bail!(
-                        r#"schema "{}" lacks the "arg" in the schema"#,
-                        schema.name.unwrap_or("".to_string())
-                    );
-                }
-            }
-            "boolean" => {
-                if let Some(arg) = &schema.arg {
-                    if let Some(value) = self.matches.get_one::<bool>(arg) {
-                        Ok(Some((*value).into()))
-                    } else {
-                        Ok(None)
-                    }
-                } else {
-                    bail!(
-                        r#"schema "{}" lacks the "arg" in the schema"#,
-                        schema.name.unwrap_or("".to_string())
-                    );
-                }
-            }
-            // TODO: We shall handle float and other potential types in the metadata.
-            //       Then fail the other cases.
             _ => {
-                // We suppose any other type as a json value first, if failed, try to parse it as a string
+                // The other types are all passed in its json form, hence can be directly decoded
                 if let Some(arg) = &schema.arg {
-                    if let Some(value) = self.matches.get_one::<String>(arg) {
-                        match serde_json::from_str(value) {
-                            Ok(v) => Ok(Some(v)),
-                            Err(_) => Ok(Some(serde_json::Value::String(value.clone()))),
-                        }
+                    if let Some(value) = self.0.get_one::<String>(arg) {
+                        Ok(serde_json::from_str(value)?)
                     } else {
                         Ok(None)
                     }
                 } else {
-                    bail!(
-                        r#"schema "{}" lacks the "arg" in the schema"#,
-                        schema.name.unwrap_or("".to_string())
-                    );
+                    bail!(r#"schema "{schema:#?}" lacks the "arg" in the schema"#);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use clap::{Arg, Command};
+    use serde_json::Value;
+
+    #[test]
+    fn build_value() {
+        let m = Command::new("test")
+            .arg(Arg::new("bool").long("bool"))
+            .arg(Arg::new("int").long("int"))
+            .arg(Arg::new("str").long("str"))
+            .arg(Arg::new("array-of-str").long("array-of-str"))
+            .arg(Arg::new("obj").long("obj"))
+            .get_matches_from(vec![
+                "test",
+                "--bool",
+                "true",
+                "--int",
+                "123",
+                "--str",
+                "abc",
+                "--array-of-str",
+                r#"["a", "b", "c"]"#,
+                "--obj",
+                r#"{"bool": true, "int": 123, "str": "abc", "array": ["a"]}"#,
+            ]);
+
+        let schema = Schema {
+            type_: "object".to_string(),
+            props: Some(vec![
+                Schema {
+                    type_: "boolean".to_string(),
+                    arg: Some("bool".to_string()),
+                    name: Some("bool".to_string()),
+                    ..Schema::default()
+                },
+                Schema {
+                    type_: "integer32".to_string(),
+                    arg: Some("int".to_string()),
+                    name: Some("int".to_string()),
+                    ..Schema::default()
+                },
+                Schema {
+                    type_: "string".to_string(),
+                    arg: Some("str".to_string()),
+                    name: Some("str".to_string()),
+                    ..Schema::default()
+                },
+                Schema {
+                    type_: "array".to_string(),
+                    arg: Some("array-of-str".to_string()),
+                    name: Some("array-of-str".to_string()),
+                    item: Some(Box::new(Schema {
+                        type_: "string".to_string(),
+                        ..Schema::default()
+                    })),
+                    ..Schema::default()
+                },
+                Schema {
+                    type_: "object".to_string(),
+                    arg: Some("obj".to_string()),
+                    name: Some("obj".to_string()),
+                    props: Some(vec![
+                        Schema {
+                            type_: "boolean".to_string(),
+                            arg: Some("bool".to_string()),
+                            name: Some("bool".to_string()),
+                            ..Schema::default()
+                        },
+                        Schema {
+                            type_: "integer32".to_string(),
+                            arg: Some("int".to_string()),
+                            name: Some("int".to_string()),
+                            ..Schema::default()
+                        },
+                        Schema {
+                            type_: "string".to_string(),
+                            arg: Some("str".to_string()),
+                            name: Some("str".to_string()),
+                            ..Schema::default()
+                        },
+                        Schema {
+                            type_: "array".to_string(),
+                            arg: Some("array-of-str".to_string()),
+                            name: Some("array-of-str".to_string()),
+                            item: Some(Box::new(Schema {
+                                type_: "string".to_string(),
+                                ..Schema::default()
+                            })),
+                            ..Schema::default()
+                        },
+                    ]),
+                    ..Schema::default()
+                },
+            ]),
+            ..Schema::default()
+        };
+        let bb = BodyBuilder(&m);
+        let value = bb.build_body(&schema).unwrap();
+        let expect: Value = serde_json::from_str(
+            r#"
+{
+  "array-of-str": [
+    "a",
+    "b",
+    "c"
+  ],
+  "bool": true,
+  "int": 123,
+  "obj": {
+    "array": [
+      "a"
+    ],
+    "bool": true,
+    "int": 123,
+    "str": "abc"
+  },
+  "str": "abc"
+}
+"#,
+        )
+        .unwrap();
+        assert_eq!(value, expect);
     }
 }
