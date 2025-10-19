@@ -3,9 +3,11 @@ use std::env;
 use backend::Backend;
 
 pub mod backend;
+mod document;
 
 pub const LSP_CMD_METADATA_VAR: &str = "AZURE_CMD_METADATA";
 
+#[tracing::instrument]
 pub async fn serve() {
     tracing::info!(
         "Az Language Server version \"{}\" starts.",
