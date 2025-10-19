@@ -223,7 +223,7 @@ pub struct Output {
     pub client_flatten: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Schema {
     #[serde(rename = "type")]
     pub type_: String,
@@ -325,11 +325,7 @@ mod test {
                         .into_iter()
                         .filter_map(|(k, v)| {
                             let v = strip_nulls(v);
-                            if v.is_null() {
-                                None
-                            } else {
-                                Some((k, v))
-                            }
+                            if v.is_null() { None } else { Some((k, v)) }
                         })
                         .collect();
                     Value::Object(cleaned)

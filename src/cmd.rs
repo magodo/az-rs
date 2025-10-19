@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
-use crate::api::{metadata_command, metadata_index, ApiManager};
+use crate::api::{ApiManager, metadata_command, metadata_index};
 use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
-use clap::{command, Arg, Command};
+use clap::{Arg, Command, command};
 
 pub fn cmd() -> Command {
     cmd_base().subcommands([
@@ -272,7 +272,6 @@ fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
     if let Some(help) = &arg.help {
         out = out.help(help.short.clone());
     }
-
     if handle_required {
         if let Some(required) = arg.required {
             out = out.required(required);
