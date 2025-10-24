@@ -7,10 +7,12 @@ use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
-        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
-        HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MarkedString, PositionEncodingKind, ServerCapabilities,
-        TextDocumentSyncCapability, TextDocumentSyncKind,
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
+        FullDocumentDiagnosticReport, Hover, HoverContents, HoverParams, HoverProviderCapability,
+        InitializeParams, InitializeResult, InitializedParams, MarkedString, PositionEncodingKind,
+        RelatedFullDocumentDiagnosticReport, ServerCapabilities, TextDocumentSyncCapability,
+        TextDocumentSyncKind, Url,
     },
     Client, LanguageServer,
 };
@@ -33,6 +35,27 @@ impl Backend {
             documents: Default::default(),
         }
     }
+
+    async fn reset_diagnostics(&self, document_uri: &Url) {
+        self.client
+            .publish_diagnostics(document_uri.clone(), Vec::new(), None)
+            .await;
+    }
+
+    async fn publish_diagnostics(&self, document_uri: &Url) {
+        let diags;
+        {
+            let documents = self.documents.read().unwrap();
+            let Some(document) = documents.get(document_uri) else {
+                return;
+            };
+            diags = document.get_diagnostics();
+        }
+
+        self.client
+            .publish_diagnostics(document_uri.clone(), diags, None)
+            .await;
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -51,17 +74,22 @@ impl LanguageServer for Backend {
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
-                // NOTE that we enforce to use UTF8 though the spec asks the server to always
-                // support UTF16.
-                // This is to ease the document offset implementation. In case there is
-                // editor/client does only support UTF16, we shall consider update the code and
-                // support UTF16.
-                position_encoding: Some(PositionEncodingKind::UTF8),
+                position_encoding: Some(PositionEncodingKind::UTF16),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::INCREMENTAL,
+                    TextDocumentSyncKind::FULL,
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
+                // TODO: Enable the pull-style diagnostics will cause double diagnostics: pulled
+                // and pushed.
+                //
+                // diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
+                //     DiagnosticOptions {
+                //         inter_file_dependencies: false,
+                //         workspace_diagnostics: false,
+                //         ..Default::default()
+                //     },
+                // )),
                 ..Default::default()
             },
             ..Default::default()
@@ -90,7 +118,7 @@ impl LanguageServer for Backend {
             documents.insert(doc.uri.clone(), Document::new(&doc.text));
             tracing::debug!(doc.text);
         }
-        // TODO: consider publish diags
+        self.publish_diagnostics(&doc.uri).await;
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -108,13 +136,41 @@ impl LanguageServer for Backend {
                 document.apply_change(change);
             }
         }
-        // TODO: consider publish diags
+        self.publish_diagnostics(&doc.uri).await;
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         tracing::debug!("message received");
         tracing::trace!(?params);
+        let doc = params.text_document;
+        self.reset_diagnostics(&doc.uri).await;
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn diagnostic(
+        &self,
+        params: DocumentDiagnosticParams,
+    ) -> Result<DocumentDiagnosticReportResult> {
+        let documents = self.documents.read().unwrap();
+        let Some(document) = documents.get(&params.text_document.uri) else {
+            return Ok({
+                DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
+                    RelatedFullDocumentDiagnosticReport::default(),
+                ))
+            });
+        };
+        Ok({
+            DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
+                RelatedFullDocumentDiagnosticReport {
+                    full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                        items: document.get_diagnostics(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ))
+        })
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
