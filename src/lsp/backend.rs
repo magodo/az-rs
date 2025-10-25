@@ -8,12 +8,10 @@ use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
-        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-        FullDocumentDiagnosticReport, Hover, HoverContents, HoverParams, HoverProviderCapability,
-        InitializeParams, InitializeResult, InitializedParams, MarkedString, PositionEncodingKind,
-        RelatedFullDocumentDiagnosticReport, ServerCapabilities, TextDocumentSyncCapability,
-        TextDocumentSyncKind, Url,
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
+        HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, MarkedString, PositionEncodingKind, ServerCapabilities,
+        TextDocumentSyncCapability, TextDocumentSyncKind, Url,
     },
 };
 
@@ -80,16 +78,6 @@ impl LanguageServer for Backend {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
-                // TODO: Enable the pull-style diagnostics will cause double diagnostics: pulled
-                // and pushed.
-                //
-                // diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
-                //     DiagnosticOptions {
-                //         inter_file_dependencies: false,
-                //         workspace_diagnostics: false,
-                //         ..Default::default()
-                //     },
-                // )),
                 ..Default::default()
             },
             ..Default::default()
@@ -145,32 +133,6 @@ impl LanguageServer for Backend {
         tracing::trace!(?params);
         let doc = params.text_document;
         self.reset_diagnostics(&doc.uri).await;
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn diagnostic(
-        &self,
-        params: DocumentDiagnosticParams,
-    ) -> Result<DocumentDiagnosticReportResult> {
-        let documents = self.documents.read().unwrap();
-        let Some(document) = documents.get(&params.text_document.uri) else {
-            return Ok({
-                DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
-                    RelatedFullDocumentDiagnosticReport::default(),
-                ))
-            });
-        };
-        Ok({
-            DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
-                RelatedFullDocumentDiagnosticReport {
-                    full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                        items: document.get_diagnostics(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            ))
-        })
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
