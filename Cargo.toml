@@ -39,8 +39,6 @@ tempfile = "3.23.0"
 tower-lsp = "0.20.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
-tree-sitter = "0.25.10"
-tree-sitter-hcl = "1.1.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
@@ -63,6 +61,9 @@ typespec_client_core = { version = "0.7.0", features = ["wasm_bindgen"] }
 uuid = { version = "1", features = ["js", "v4"] }
 wasm-bindgen = { version = "0.2.100" }
 wasm-bindgen-futures = { version = "0.4.50" }
+
+[patch.crates-io]
+lsp-document = { git = 'https://github.com/artempyanykh/rust-lsp-document.git', commit = 'd08ce4d2e36b073611d0db17e5a2b41a70d8daa4' }
 
 [features]
 embed-api = [

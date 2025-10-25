@@ -1,88 +1,65 @@
-use lsp_document::{IndexedText, TextMap};
+use hcl::Body;
+use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, TextDocumentContentChangeEvent,
+    Diagnostic, DiagnosticSeverity, NumberOrString, TextDocumentContentChangeEvent,
 };
-use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator, Tree};
 
 pub struct Document {
-    parser: Parser,
-    query_error: Query,
-    query_miss: Query,
-    tree: Option<Tree>,
+    hcl_body: hcl::Result<Body>,
     text: IndexedText<String>,
 }
 
 impl Document {
     pub fn new(text: &str) -> Self {
-        let lang = tree_sitter_hcl::LANGUAGE;
-        let mut parser = Parser::new();
-        parser
-            .set_language(&lang.into())
-            .expect("Error loading HCL grammer");
         let text = IndexedText::new(text.to_string());
-        let tree = parser.parse(text.text(), None);
-        let query_error = Query::new(&lang.into(), "(ERROR) @error").unwrap();
-        let query_miss = Query::new(&lang.into(), "(MISSING) @miss").unwrap();
-        Self {
-            parser,
-            query_error,
-            query_miss,
-            tree,
-            text,
-        }
+        let hcl_body = hcl::parse(text.text());
+        Self { hcl_body, text }
     }
 
     pub fn apply_change(&mut self, change: &TextDocumentContentChangeEvent) {
         if change.range.is_some() {
             panic!("Incremental change is not supported");
         }
-        self.tree = self.parser.parse(&change.text, None);
         self.text = IndexedText::new(change.text.clone());
-        dbg!(self.tree.as_ref().unwrap().root_node().to_sexp());
+        self.hcl_body = hcl::parse(self.text.text());
+        dbg!(&self.hcl_body);
     }
 
     pub fn get_diagnostics(&self) -> Vec<Diagnostic> {
-        let Some(ref tree) = self.tree else {
+        if self.hcl_body.is_ok() {
+            return Vec::new();
+        }
+        let Err(ref err) = self.hcl_body else {
             return Vec::new();
         };
-        let root_node = tree.root_node();
-
-        let mut diags = Vec::new();
-        let mut add_diag = |query: &Query, severity: DiagnosticSeverity, code: String| {
-            let mut query_cursor = QueryCursor::new();
-            query_cursor
-                .matches(query, root_node, self.text.text().as_bytes())
-                .for_each(|m| {
-                    m.captures.iter().for_each(|capture| {
-                        let node = capture.node;
-                        let range = self.text.offset_range_to_range(node.byte_range()).unwrap();
-                        let range = Range::new(
-                            Position::new(range.start.line, range.start.col),
-                            Position::new(range.end.line, range.end.col),
-                        );
-                        diags.push(Diagnostic {
-                            range,
-                            severity: Some(severity),
-                            code: Some(NumberOrString::String(code.clone())),
-                            message: code.clone(),
-                            source: Some("azure".to_string()),
-                            ..Default::default()
-                        });
-                    });
-                });
-        };
-
-        add_diag(
-            &self.query_error,
-            DiagnosticSeverity::ERROR,
-            "ERROR".to_string(),
-        );
-        add_diag(
-            &self.query_miss,
-            DiagnosticSeverity::WARNING,
-            "MISSING".to_string(),
-        );
-        tracing::debug!("Diagnostics: {:#?}", diags);
-        diags
+        tracing::debug!("parse error: {:#?}", err);
+        match err {
+            hcl::Error::Parse(err) => {
+                let loc = err.location();
+                // This range is zero indexed, hence needs to minus 1 from loc.
+                let range = std::ops::Range {
+                    start: Pos {
+                        line: (loc.line() - 1) as u32,
+                        col: (loc.column() - 1) as u32,
+                    },
+                    end: Pos {
+                        line: (loc.line() - 1) as u32,
+                        col: (err.line().len()) as u32,
+                    },
+                };
+                let range = self.text.range_to_lsp_range(&range).unwrap();
+                let diag = Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(NumberOrString::String("parse".to_string())),
+                    source: Some("az-rs".to_string()),
+                    message: err.message().to_string(),
+                    ..Default::default()
+                };
+                tracing::debug!("diag: {diag:#?}");
+                return vec![diag];
+            }
+            _ => unreachable!("unexpected error: {err:#?}"),
+        }
     }
 }

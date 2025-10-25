@@ -4,6 +4,7 @@ use std::{
 };
 
 use tower_lsp::{
+    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
@@ -14,7 +15,6 @@ use tower_lsp::{
         RelatedFullDocumentDiagnosticReport, ServerCapabilities, TextDocumentSyncCapability,
         TextDocumentSyncKind, Url,
     },
-    Client, LanguageServer,
 };
 
 use crate::api::metadata_command::Command;

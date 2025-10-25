@@ -175,8 +175,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-web",
- "tree-sitter",
- "tree-sitter-hcl",
  "typespec_client_core 0.7.0",
  "uuid",
  "wasm-bindgen",
@@ -737,9 +735,9 @@ checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 
 [[package]]
 name = "hcl-edit"
-version = "0.9.1"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95f32dc8e2ac2efd3726a759c0e1cd91315465d75a191468dcd8f885f384cad0"
+checksum = "3ab35d988dc879e293759e29b430a4ba9e6125965eec6fd0dfab0cb349e172d7"
 dependencies = [
  "fnv",
  "hcl-primitives",
@@ -750,9 +748,9 @@ dependencies = [
 
 [[package]]
 name = "hcl-primitives"
-version = "0.1.9"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f097693bfc799cc5043956e93a28c51ca4e72f2c3daa21f65a5b0a28510df1f2"
+checksum = "829a11d304c89e2cfe0dbb494a686bbe2b48ade17705c62cd1957b04aa4630f6"
 dependencies = [
  "itoa",
  "kstring",
@@ -1112,23 +1110,9 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "lsp-document"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43590d4fd929e822de2ab109b9422467f1c547fe543be27e522b043c457dcb37"
+source = "git+https://github.com/artempyanykh/rust-lsp-document.git#d08ce4d2e36b073611d0db17e5a2b41a70d8daa4"
 dependencies = [
- "lsp-types 0.93.2",
-]
-
-[[package]]
-name = "lsp-types"
-version = "0.93.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be6e9c7e2d18f651974370d7aff703f9513e0df6e464fd795660edc77e6ca51"
-dependencies = [
- "bitflags 1.3.2",
- "serde",
- "serde_json",
- "serde_repr",
- "url",
+ "lsp-types",
 ]
 
 [[package]]
@@ -1451,18 +1435,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "regex"
-version = "1.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "843bc0191f75f3e22651ae5f1e72939ab2f72a4bc30fa80a066bd66edefc24d4"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-automata",
- "regex-syntax",
-]
-
-[[package]]
 name = "regex-automata"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1681,7 +1653,6 @@ version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
- "indexmap",
  "itoa",
  "memchr",
  "ryu",
@@ -1773,12 +1744,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 
 [[package]]
 name = "strsim"
@@ -1996,7 +1961,7 @@ dependencies = [
  "dashmap",
  "futures",
  "httparse",
- "lsp-types 0.94.1",
+ "lsp-types",
  "memchr",
  "serde",
  "serde_json",
@@ -2097,36 +2062,6 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
 ]
-
-[[package]]
-name = "tree-sitter"
-version = "0.25.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78f873475d258561b06f1c595d93308a7ed124d9977cb26b148c2084a4a3cc87"
-dependencies = [
- "cc",
- "regex",
- "regex-syntax",
- "serde_json",
- "streaming-iterator",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-hcl"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a7b2cc3d7121553b84309fab9d11b3ff3d420403eef9ae50f9fd1cd9d9cf012"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-language"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4013970217383f67b18aef68f6fb2e8d409bc5755227092d32efb0422ba24b8"
 
 [[package]]
 name = "try-lock"
