@@ -15,21 +15,21 @@ use tower_lsp::{
     },
 };
 
-use crate::api::metadata_command::Command;
+use crate::api::metadata_command::Operation;
 
 use super::document::Document;
 
 pub struct Backend {
     client: Client,
-    cmd: Command,
+    operation: Operation,
     documents: Arc<RwLock<HashMap<tower_lsp::lsp_types::Url, Document>>>,
 }
 
 impl Backend {
-    pub fn new(client: Client, cmd: Command) -> Self {
+    pub fn new(client: Client, operation: &Operation) -> Self {
         Self {
             client,
-            cmd,
+            operation: operation.clone(),
             documents: Default::default(),
         }
     }

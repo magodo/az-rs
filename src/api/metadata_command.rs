@@ -253,26 +253,30 @@ pub struct AdditionalPropItemSchema {
 }
 
 impl Command {
-    pub fn select_operation(&self, matches: &ArgMatches) -> Option<&Operation> {
-        if self.conditions.is_none() {
-            return self.operations.first();
+    pub fn select_operation(&self, cond: Option<&String>) -> Option<&Operation> {
+        if let Some(cond) = cond {
+            self.operations
+                .iter()
+                .find(|op| op.when.clone().unwrap_or(vec![]).iter().any(|w| w == cond))
+        } else {
+            if self.operations.len() != 1 {
+                return None;
+            } else {
+                Some(&self.operations[0])
+            }
         }
+    }
 
-        let matched_condition = self
-            .conditions
+    pub fn match_condition(&self, matches: &ArgMatches) -> Option<String> {
+        if self.conditions.is_none() {
+            return None;
+        }
+        self.conditions
             .as_ref()
             .unwrap()
             .iter()
             .find(|&c| self.match_operator(&c.operator, matches))
-            .map(|c| c.var.clone())?;
-
-        self.operations.iter().find(|op| {
-            op.when
-                .clone()
-                .unwrap_or(vec![])
-                .iter()
-                .any(|w| w == &matched_condition)
-        })
+            .map(|c| c.var.clone())
     }
 
     fn match_operator(&self, operator: &ConditionOperator, matches: &ArgMatches) -> bool {
@@ -325,7 +329,11 @@ mod test {
                         .into_iter()
                         .filter_map(|(k, v)| {
                             let v = strip_nulls(v);
-                            if v.is_null() { None } else { Some((k, v)) }
+                            if v.is_null() {
+                                None
+                            } else {
+                                Some((k, v))
+                            }
                         })
                         .collect();
                     Value::Object(cleaned)

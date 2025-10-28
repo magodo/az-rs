@@ -44,26 +44,38 @@ where
                 vec![]
             };
             let input = CliInput::new(args)?;
-            let api_manager = ApiManager::new(metadata_path)?;
+            let api_manager = ApiManager::new(&metadata_path)?;
             let cmd = cmd::cmd_api(&api_manager, &input);
             let mut matches = get_matches(cmd, raw_input.clone())?;
 
             // Reaches here indicates an API command/operation is specified.
-            let cmd_metadata = api_manager.locate_command_metadata(&input)?;
 
             // Match the subcommand to the end, which returns the matches for the last subcommand.
             while let Some((_, m)) = matches.subcommand() {
                 matches = m.clone();
             }
 
-            // Read the HCL body, if any.
+            // Locate the operation
+            let command_file = api_manager.locate_command_file(&input)?;
+            let cmd_metadata = api_manager.read_command(&command_file)?;
+            let cmd_cond = cmd_metadata.match_condition(&matches);
+            let operation = cmd_metadata
+                .select_operation(cmd_cond.as_ref())
+                .ok_or(anyhow!("no operation is selected"))?;
+
             let mut hcl_body = None;
             if let Some(p) = matches.get_one::<PathBuf>("file") {
+                // Read the HCL from file
                 hcl_body = Some(get_file(&p)?);
             } else if matches.get_flag("edit") {
+                // Read the HCL from editor
                 let header = "# ...".to_string();
-                let cmd_json = serde_json::to_string(&cmd_metadata)?;
-                let content = edit(&header, &cmd_json)?;
+                let content = edit(
+                    &header,
+                    metadata_path.to_string_lossy().as_ref(),
+                    &command_file,
+                    cmd_cond.as_ref(),
+                )?;
                 let content = content.trim();
 
                 // If the content is "empty", pause the process and exit.
@@ -82,11 +94,6 @@ where
             } else {
                 None
             };
-
-            // Select the operation based on the user's input
-            let operation = cmd_metadata
-                .select_operation(&matches)
-                .ok_or(anyhow!("no operation is selected"))?;
 
             // Print CLI and quit
             if let Some(shell) = matches.get_one::<String>("print-cli") {
@@ -136,16 +143,26 @@ fn get_file(p: &PathBuf) -> Result<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn edit(_: &String, _: &String) -> Result<String> {
+fn edit(_: &String, _: &str, _: &str, _: Option<&str>) -> Result<String> {
     Err(anyhow!(r#""--edit" is not supported on wasm32"#))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn edit(content: &String, cmd_metadata: &String) -> Result<String> {
-    Ok(edit::edit_with_builder_with_env(
-        content,
-        tempfile::Builder::new().suffix(".az"),
-        std::collections::HashMap::from([(lsp::LSP_CMD_METADATA_VAR, cmd_metadata)]),
-    )?
-    .to_string())
+fn edit(
+    content: &String,
+    metadata_path: &str,
+    cmd_file: &str,
+    cmd_cond: Option<&String>,
+) -> Result<String> {
+    let mut envs = std::collections::HashMap::from([
+        (lsp::LSP_METADATA_PATH, metadata_path),
+        (lsp::LSP_CMD_FILE, cmd_file),
+    ]);
+    if let Some(cmd_cond) = cmd_cond {
+        envs.insert(lsp::LSP_CMD_CONDITION, cmd_cond);
+    }
+    Ok(
+        edit::edit_with_builder_with_env(content, tempfile::Builder::new().suffix(".az"), envs)?
+            .to_string(),
+    )
 }

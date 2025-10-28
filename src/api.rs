@@ -19,11 +19,6 @@ impl ApiManager {
     pub fn locate_command_file(&self, input: &CliInput) -> Result<String> {
         self.index.locate_command_file(input)
     }
-
-    pub fn locate_command_metadata(&self, input: &CliInput) -> Result<metadata_command::Command> {
-        let command_file = self.locate_command_file(input)?;
-        self.read_command(&command_file)
-    }
 }
 
 #[cfg(any(feature = "embed-api", target_arch = "wasm32"))]
@@ -68,7 +63,7 @@ mod fs {
     use std::path::PathBuf;
 
     impl super::ApiManager {
-        pub fn new(path: PathBuf) -> Result<Self> {
+        pub fn new(path: &PathBuf) -> Result<Self> {
             // TODO: Validate the files
             let index_path = path.join("index.json");
             let commands_path = path.join("commands");
