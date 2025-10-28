@@ -163,6 +163,7 @@ dependencies = [
  "console_error_panic_hook",
  "edit",
  "getrandom",
+ "hcl-edit",
  "hcl-rs",
  "lsp-document",
  "pretty_assertions",
@@ -1110,7 +1111,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "lsp-document"
 version = "0.6.0"
-source = "git+https://github.com/artempyanykh/rust-lsp-document.git#d08ce4d2e36b073611d0db17e5a2b41a70d8daa4"
+source = "git+https://github.com/artempyanykh/rust-lsp-document.git?rev=d08ce4d2e36b073611d0db17e5a2b41a70d8daa4#d08ce4d2e36b073611d0db17e5a2b41a70d8daa4"
 dependencies = [
  "lsp-types",
 ]
