@@ -155,7 +155,10 @@ impl LanguageServer for Backend {
         let Some(document) = documents.get(&doc.uri) else {
             return Ok(None);
         };
-        if let Some(text) = document.hover(&self.operation) {
+        if let Some(text) = document.hover(
+            &self.operation,
+            &params.text_document_position_params.position,
+        ) {
             Ok(Some(Hover {
                 contents: HoverContents::Markup(MarkupContent {
                     kind: MarkupKind::Markdown,

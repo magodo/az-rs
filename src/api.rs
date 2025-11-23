@@ -24,7 +24,7 @@ impl ApiManager {
 #[cfg(any(feature = "embed-api", target_arch = "wasm32"))]
 mod embedded {
     use super::metadata_command::Command;
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use std::path::PathBuf;
 
     use rust_embed::RustEmbed;
@@ -34,7 +34,7 @@ mod embedded {
     struct Asset;
 
     impl super::ApiManager {
-        pub fn new(_: PathBuf) -> Result<Self> {
+        pub fn new(_: &PathBuf) -> Result<Self> {
             let bytes: Vec<u8> = Asset::get("index.json")
                 .map(|d| d.data.to_vec())
                 .ok_or(anyhow!("index.json doesn't exist"))?;

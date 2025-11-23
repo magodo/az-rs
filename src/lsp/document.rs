@@ -1,7 +1,7 @@
 use hcl_edit::{parser, structure};
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, NumberOrString, TextDocumentContentChangeEvent,
+    Diagnostic, DiagnosticSeverity, NumberOrString, Position, TextDocumentContentChangeEvent,
 };
 use tree_sitter::{Parser, Tree};
 
@@ -44,7 +44,25 @@ impl Document {
         self.syntax_ts = self.parser_ts.parse(self.text.text(), None);
     }
 
-    pub fn hover(&self, operation: &Operation) -> Option<String> {}
+    pub fn hover(&self, operation: &Operation, position: &Position) -> Option<String> {
+        let Some(syntax_ts) = &self.syntax_ts else {
+            return None;
+        };
+        let Some(pos) = self.text.lsp_pos_to_pos(position) else {
+            return None;
+        };
+        let Some(offset) = self.text.pos_to_offset(&pos) else {
+            return None;
+        };
+        let Some(node) = syntax_ts
+            .root_node()
+            .descendant_for_byte_range(offset, offset)
+        else {
+            return None;
+        };
+        tracing::info!("grammar name: {:#?}", node.grammar_name());
+        return None;
+    }
 
     pub fn get_diagnostics(&self) -> Vec<Diagnostic> {
         if self.syntax_hcl.is_ok() {
@@ -54,9 +72,9 @@ impl Document {
             return Vec::new();
         };
         tracing::debug!("parse error: {:#?}", err);
+        // Parse error location of hcl-rs (i.e. loc) starts from (1,1).
+        // The LSP range below is zero indexed, hence needs to minus 1 from loc.
         let loc = err.location();
-
-        // The range below is zero indexed, hence needs to minus 1 from loc.
         let range = std::ops::Range {
             start: Pos {
                 line: (loc.line() - 1) as u32,
