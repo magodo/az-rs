@@ -7,6 +7,7 @@ use crate::api::ApiManager;
 
 pub mod backend;
 mod document;
+mod hcl_visitor;
 
 pub const LSP_METADATA_PATH: &str = "AZURE_LSP_METADATA_PATH";
 pub const LSP_CMD_FILE: &str = "AZURE_LSP_CMD_FILE";

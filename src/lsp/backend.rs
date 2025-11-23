@@ -4,15 +4,15 @@ use std::{
 };
 
 use tower_lsp::{
-    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
         HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MarkedString, PositionEncodingKind, ServerCapabilities,
-        TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+        InitializedParams, MarkedString, MarkupContent, MarkupKind, PositionEncodingKind,
+        ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
     },
+    Client, LanguageServer,
 };
 
 use crate::api::metadata_command::Operation;
@@ -149,9 +149,22 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         tracing::debug!("message received");
         tracing::trace!(?params);
-        Ok(Some(Hover {
-            contents: HoverContents::Scalar(MarkedString::String("You're hovering!".to_string())),
-            range: None,
-        }))
+
+        let doc = params.text_document_position_params.text_document;
+        let documents = self.documents.read().unwrap();
+        let Some(document) = documents.get(&doc.uri) else {
+            return Ok(None);
+        };
+        if let Some(text) = document.hover(&self.operation) {
+            Ok(Some(Hover {
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: text,
+                }),
+                range: None,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }

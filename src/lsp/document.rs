@@ -3,17 +3,36 @@ use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, NumberOrString, TextDocumentContentChangeEvent,
 };
+use tree_sitter::{Parser, Tree};
+
+use crate::api::metadata_command::Operation;
 
 pub struct Document {
-    hcl_body: Result<structure::Body, parser::Error>,
     text: IndexedText<String>,
+    parser_ts: Parser,
+
+    // This is strict syntax, used for diagnositics
+    syntax_hcl: Result<structure::Body, parser::Error>,
+
+    // This is lossy tolerant syntax, used for other features
+    syntax_ts: Option<Tree>,
 }
 
 impl Document {
     pub fn new(text: &str) -> Self {
         let text = IndexedText::new(text.to_string());
-        let hcl_body = parser::parse_body(text.text());
-        Self { hcl_body, text }
+        let mut parser_ts = Parser::new();
+        parser_ts
+            .set_language(&tree_sitter_hcl::LANGUAGE.into())
+            .expect("error loading HCL grammar");
+        let syntax_ts = parser_ts.parse(text.text(), None);
+        let syntax = parser::parse_body(text.text());
+        Self {
+            syntax_hcl: syntax,
+            syntax_ts,
+            parser_ts,
+            text,
+        }
     }
 
     pub fn apply_change(&mut self, change: &TextDocumentContentChangeEvent) {
@@ -21,15 +40,17 @@ impl Document {
             panic!("Incremental change is not supported");
         }
         self.text = IndexedText::new(change.text.clone());
-        self.hcl_body = parser::parse_body(self.text.text());
-        dbg!(&self.hcl_body);
+        self.syntax_hcl = parser::parse_body(self.text.text());
+        self.syntax_ts = self.parser_ts.parse(self.text.text(), None);
     }
 
+    pub fn hover(&self, operation: &Operation) -> Option<String> {}
+
     pub fn get_diagnostics(&self) -> Vec<Diagnostic> {
-        if self.hcl_body.is_ok() {
+        if self.syntax_hcl.is_ok() {
             return Vec::new();
         }
-        let Err(ref err) = self.hcl_body else {
+        let Err(ref err) = self.syntax_hcl else {
             return Vec::new();
         };
         tracing::debug!("parse error: {:#?}", err);

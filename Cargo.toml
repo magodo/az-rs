@@ -40,6 +40,8 @@ tempfile = "3.23.0"
 tower-lsp = "0.20.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
+tree-sitter = "0.25.10"
+tree-sitter-hcl = "1.1.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
