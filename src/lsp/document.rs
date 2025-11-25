@@ -1,9 +1,10 @@
+use anyhow::Result;
 use hcl_edit::{parser, structure};
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, NumberOrString, Position, TextDocumentContentChangeEvent,
 };
-use tree_sitter::{Parser, Tree};
+use tree_sitter::{Node, Parser, Tree};
 
 use crate::api::metadata_command::Operation;
 
@@ -60,7 +61,41 @@ impl Document {
         else {
             return None;
         };
-        tracing::info!("grammar name: {:#?}", node.grammar_name());
+
+        // If the focused node is not an identifier, return early.
+        if node.kind() != "identifier" {
+            return None;
+        }
+
+        // Look up the path of identifiers from top to this node, regardless if it is a block,
+        // attribute or key of an object element.
+        let mut nodes = vec![];
+        let mut n = node;
+        loop {
+            nodes.push(n);
+            if let Some(p) = n.parent() {
+                n = p;
+            } else {
+                break;
+            }
+        }
+        nodes.reverse();
+        let mut paths = vec![];
+        for node in nodes {
+            if let Some(ident) = match node.kind() {
+                "block" | "attribute" => node.child(0),
+                "object_elem" => node
+                    .child_by_field_name("key")
+                    .and_then(|expr| expr.child(0))
+                    .filter(|vexpr| vexpr.kind() == "variable_expr")
+                    .and_then(|vexpr| vexpr.child(0))
+                    .filter(|ident| ident.kind() == "identifier"),
+                _ => None,
+            } {
+                paths.push(ident.utf8_text(self.text.text().as_bytes()).ok()?);
+            }
+        }
+        tracing::info!("grammar path: {:#?}", paths);
         return None;
     }
 
