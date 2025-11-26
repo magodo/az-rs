@@ -4,7 +4,7 @@ use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, NumberOrString, Position, TextDocumentContentChangeEvent,
 };
-use tree_sitter::{Node, Parser, Tree};
+use tree_sitter::{Parser, Tree};
 
 use crate::api::metadata_command::Operation;
 
@@ -55,48 +55,49 @@ impl Document {
         let Some(offset) = self.text.pos_to_offset(&pos) else {
             return None;
         };
-        let Some(node) = syntax_ts
-            .root_node()
-            .descendant_for_byte_range(offset, offset)
+
+        let Some(paths) = hcl_path_by_offset(self.text.text().as_bytes(), offset, syntax_ts) else {
+            return None;
+        };
+
+        tracing::debug!("grammar path: {:#?}", paths);
+
+        if paths.is_empty() {
+            return None;
+        }
+
+        let Some(mut schema) = operation
+            .http
+            .as_ref()
+            .and_then(|http| http.request.body.as_ref())
+            .and_then(|body| body.json.schema.as_ref())
         else {
             return None;
         };
 
-        // If the focused node is not an identifier, return early.
-        if node.kind() != "identifier" {
+        let mut found = true;
+        for path in paths {
+            if let Some(next_schema) = schema.props.as_ref().and_then(|props| {
+                props.iter().find(|prop| {
+                    if let Some(name) = prop.name.as_ref() {
+                        name == path
+                    } else {
+                        false
+                    }
+                })
+            }) {
+                schema = next_schema;
+            } else {
+                found = false;
+                break;
+            };
+        }
+        if !found {
             return None;
         }
+        tracing::debug!("Hover result: {:#?}", schema.name);
 
-        // Look up the path of identifiers from top to this node, regardless if it is a block,
-        // attribute or key of an object element.
-        let mut nodes = vec![];
-        let mut n = node;
-        loop {
-            nodes.push(n);
-            if let Some(p) = n.parent() {
-                n = p;
-            } else {
-                break;
-            }
-        }
-        nodes.reverse();
-        let mut paths = vec![];
-        for node in nodes {
-            if let Some(ident) = match node.kind() {
-                "block" | "attribute" => node.child(0),
-                "object_elem" => node
-                    .child_by_field_name("key")
-                    .and_then(|expr| expr.child(0))
-                    .filter(|vexpr| vexpr.kind() == "variable_expr")
-                    .and_then(|vexpr| vexpr.child(0))
-                    .filter(|ident| ident.kind() == "identifier"),
-                _ => None,
-            } {
-                paths.push(ident.utf8_text(self.text.text().as_bytes()).ok()?);
-            }
-        }
-        tracing::info!("grammar path: {:#?}", paths);
-        return None;
+        return schema.name.clone();
     }
 
     pub fn get_diagnostics(&self) -> Vec<Diagnostic> {
@@ -132,4 +133,52 @@ impl Document {
         tracing::debug!("diag: {diag:#?}");
         return vec![diag];
     }
+}
+
+fn hcl_path_by_offset<'a, 'b>(
+    text: &'a [u8],
+    offset: usize,
+    syntax_ts: &'b Tree,
+) -> Option<Vec<&'a str>> {
+    let Some(node) = syntax_ts
+        .root_node()
+        .descendant_for_byte_range(offset, offset)
+    else {
+        return None;
+    };
+
+    // If the focused node is not an identifier, return early.
+    if node.kind() != "identifier" {
+        return None;
+    }
+
+    // Look up the path of identifiers from top to this node, regardless if it is a block,
+    // attribute or key of an object element.
+    let mut nodes = vec![];
+    let mut n = node;
+    loop {
+        nodes.push(n);
+        if let Some(p) = n.parent() {
+            n = p;
+        } else {
+            break;
+        }
+    }
+    nodes.reverse();
+    let mut paths = vec![];
+    for node in nodes {
+        if let Some(ident) = match node.kind() {
+            "block" | "attribute" | "ERROR" => node.child(0),
+            "object_elem" => node
+                .child_by_field_name("key")
+                .and_then(|expr| expr.child(0))
+                .filter(|vexpr| vexpr.kind() == "variable_expr")
+                .and_then(|vexpr| vexpr.child(0))
+                .filter(|ident| ident.kind() == "identifier"),
+            _ => None,
+        } {
+            paths.push(ident.utf8_text(text).ok()?);
+        }
+    }
+    Some(paths)
 }

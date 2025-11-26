@@ -4,15 +4,15 @@ use std::{
 };
 
 use tower_lsp::{
+    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
         ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
         HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MarkedString, MarkupContent, MarkupKind, PositionEncodingKind,
-        ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+        InitializedParams, MarkupContent, MarkupKind, PositionEncodingKind, ServerCapabilities,
+        TextDocumentSyncCapability, TextDocumentSyncKind, Url,
     },
-    Client, LanguageServer,
 };
 
 use crate::api::metadata_command::Operation;
