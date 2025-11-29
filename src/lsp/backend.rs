@@ -4,15 +4,15 @@ use std::{
 };
 
 use tower_lsp::{
-    Client, LanguageServer,
     jsonrpc::Result,
     lsp_types::{
-        ClientInfo, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
+        ClientInfo, CompletionOptions, CompletionParams, CompletionResponse,
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
         HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, MarkupContent, MarkupKind, PositionEncodingKind, ServerCapabilities,
         TextDocumentSyncCapability, TextDocumentSyncKind, Url,
     },
+    Client, LanguageServer,
 };
 
 use crate::api::metadata_command::Operation;
@@ -139,10 +139,19 @@ impl LanguageServer for Backend {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         tracing::debug!("message received");
         tracing::trace!(?params);
-        Ok(Some(CompletionResponse::Array(vec![
-            CompletionItem::new_simple("Hello".to_string(), "Some detail".to_string()),
-            CompletionItem::new_simple("Bye".to_string(), "More detail".to_string()),
-        ])))
+
+        let doc = params.text_document_position.text_document;
+        let documents = self.documents.read().unwrap();
+        let Some(document) = documents.get(&doc.uri) else {
+            return Ok(None);
+        };
+        if let Some(items) =
+            document.complete(&self.operation, &params.text_document_position.position)
+        {
+            return Ok(Some(CompletionResponse::Array(items)));
+        } else {
+            return Ok(None);
+        }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
