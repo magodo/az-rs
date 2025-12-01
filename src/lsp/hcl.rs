@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tree_sitter::{Node, Tree};
+use tree_sitter::Node;
 
 // AnchorNode is one of "config_file", "block", "ERROR"
 #[derive(Clone, Debug)]
@@ -63,19 +63,4 @@ pub fn nodes_to_node(node: Node<'_>) -> Vec<Node<'_>> {
     }
     nodes.reverse();
     nodes
-}
-
-// identifier_path_by_offset returns the path from top config_file node down to the identifier offset node.
-pub fn identifier_path_by_offset<'a, 'b>(
-    text: &'a [u8],
-    offset: usize,
-    syntax_ts: &'b Tree,
-) -> Option<Vec<&'a str>> {
-    let node = syntax_ts
-        .root_node()
-        .descendant_for_byte_range(offset, offset)?;
-    if node.kind() != "identifier" {
-        return None;
-    }
-    identifier_path_of_nodes(text, &nodes_to_node(node)).ok()
 }

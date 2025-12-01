@@ -1,4 +1,4 @@
-use crate::lsp::{complete, hcl};
+use crate::lsp::{complete, hover};
 use anyhow::Result;
 use hcl_edit::{parser, structure};
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
@@ -60,19 +60,13 @@ impl Document {
         let syntax_ts = self.syntax_ts.as_ref()?;
         let pos = self.text.lsp_pos_to_pos(position)?;
         let offset = self.text.pos_to_offset(&pos)?;
-        let paths = hcl::identifier_path_by_offset(self.text.text().as_bytes(), offset, syntax_ts)?;
-        tracing::debug!("grammar path: {:#?}", paths);
-        if paths.is_empty() {
-            return None;
-        }
-        let schema = operation.schema_by_path(&paths)?;
-        tracing::debug!("Hover result: {:#?}", schema.name);
+        let hover_info = hover::get_hover_info(&self.text, offset, syntax_ts, operation)?;
         return Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: schema.name.clone()?,
+                value: hover_info.content,
             }),
-            range: None,
+            range: hover_info.range,
         });
     }
 

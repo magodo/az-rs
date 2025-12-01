@@ -9,6 +9,7 @@ pub mod backend;
 mod complete;
 mod document;
 mod hcl;
+mod hover;
 
 pub const LSP_METADATA_PATH: &str = "AZURE_LSP_METADATA_PATH";
 pub const LSP_CMD_FILE: &str = "AZURE_LSP_CMD_FILE";
