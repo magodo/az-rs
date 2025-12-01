@@ -72,11 +72,18 @@ fn completion_info_by_offset<'a>(
     if anchor_node.inner().is_error() {
         // Error anchor node implies an insert into the body or object, fallback to using
         // the last syntax tree, assuming it is error free. The offset in this case works as there
-        // is only one char diff.
+        // is only "one char diff".
+        //
+        // Note: The "one char diff" assumption is weak as the client's did_change can introduce
+        // multiple bytes. While nvim seems to always send to completion right after the did_change
+        // with one char change.
         let node = last_syntax_ts
             .root_node()
             .descendant_for_byte_range(offset, offset)?;
         anchor_node = hcl::AnchorNode::from_node(node)?;
+
+        // If the old syntax is still error, then just quit.
+        // This can happen when the user editing a just typed attribute name (without the "=val" part).
         if anchor_node.inner().is_error() {
             return None;
         }
