@@ -6,6 +6,7 @@ use backend::Backend;
 use crate::api::ApiManager;
 
 pub mod backend;
+mod complete;
 mod document;
 mod hcl;
 
