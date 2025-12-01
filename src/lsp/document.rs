@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, Documentation,
     NumberOrString, Position, TextDocumentContentChangeEvent,
 };
-use tree_sitter::{Node, Parser, Tree};
+use tree_sitter::{Parser, Tree};
 
 use crate::api::metadata_command::{Operation, Schema};
 
@@ -60,7 +60,7 @@ impl Document {
         let syntax_ts = self.syntax_ts.as_ref()?;
         let pos = self.text.lsp_pos_to_pos(position)?;
         let offset = self.text.pos_to_offset(&pos)?;
-        let paths = hcl_identifier_path_by_offset(self.text.text().as_bytes(), offset, syntax_ts)?;
+        let paths = hcl::identifier_path_by_offset(self.text.text().as_bytes(), offset, syntax_ts)?;
         tracing::debug!("grammar path: {:#?}", paths);
         if paths.is_empty() {
             return None;
@@ -176,88 +176,6 @@ fn api_schema_by_path<'a>(operation: &'a Operation, paths: &[&str]) -> Option<&'
     return Some(schema);
 }
 
-fn hcl_parent_nodes(node: Node<'_>) -> Option<Vec<Node<'_>>> {
-    let mut nodes = vec![];
-    let mut n = node;
-    loop {
-        nodes.push(n);
-        if let Some(p) = n.parent() {
-            n = p;
-        } else {
-            break;
-        }
-    }
-    nodes.reverse();
-    Some(nodes)
-}
-
-// hcl_node_by_offset returns the node from top config_file node down to the offset identifier node.
-fn hcl_nodes_by_offset<'a, 'b>(offset: usize, syntax_ts: &'b Tree) -> Option<Vec<Node<'b>>> {
-    let Some(node) = syntax_ts
-        .root_node()
-        .descendant_for_byte_range(offset, offset)
-    else {
-        return None;
-    };
-
-    if node.kind() != "identifier" {
-        return None;
-    }
-
-    // Look up the path of identifiers from top to this node, regardless if it is a block,
-    // attribute or key of an object element.
-    let mut nodes = vec![];
-    let mut n = node;
-    loop {
-        nodes.push(n);
-        if let Some(p) = n.parent() {
-            n = p;
-        } else {
-            break;
-        }
-    }
-    nodes.reverse();
-    Some(nodes)
-}
-
-// hcl_identifier_path_by_offset returns the path from top config_file node down to the identifier offset node.
-fn hcl_identifier_path_by_offset<'a, 'b>(
-    text: &'a [u8],
-    offset: usize,
-    syntax_ts: &'b Tree,
-) -> Option<Vec<&'a str>> {
-    let Some(nodes) = hcl_nodes_by_offset(offset, syntax_ts) else {
-        return None;
-    };
-    hcl_identifier_path_of_nodes(text, &nodes).ok()
-}
-
-// hcl_identifier_path_of_nodes returns the path determined by the `nodes`.
-// The path segments are identifiers of any block, attribute, ERROR, object key (i.e. object_elem) along the way.
-fn hcl_identifier_path_of_nodes<'a>(text: &'a [u8], nodes: &[Node<'_>]) -> Result<Vec<&'a str>> {
-    let mut paths = vec![];
-    for node in nodes {
-        if let Some(ident) = hcl_identifier_of_node(*node) {
-            paths.push(ident.utf8_text(text)?);
-        }
-    }
-    Ok(paths)
-}
-
-fn hcl_identifier_of_node(node: Node<'_>) -> Option<Node<'_>> {
-    match node.kind() {
-        "block" | "attribute" => node.child(0),
-        "ERROR" => node.child(0).filter(|child| child.kind() == "identifier"),
-        "object_elem" => node
-            .child_by_field_name("key")
-            .and_then(|expr| expr.child(0))
-            .filter(|vexpr| vexpr.kind() == "variable_expr")
-            .and_then(|vexpr| vexpr.child(0))
-            .filter(|ident| ident.kind() == "identifier"),
-        _ => None,
-    }
-}
-
 #[derive(Clone, Debug)]
 struct CompletionInfo<'a> {
     // The identifier path from the top to the parent identifier node, if any
@@ -287,7 +205,7 @@ fn hcl_completion_info_by_offset<'a, 'b>(
         .descendant_for_byte_range(offset, offset)?;
     anchor_node = hcl::AnchorNode::from_node(node)?;
 
-    if anchor_node.0.is_error() {
+    if anchor_node.inner().is_error() {
         // Error anchor node implies an insert into the body or object, fallback to using
         // the last syntax tree, assuming it is error free. The offset in this case works as there
         // is only one char diff.
@@ -295,7 +213,7 @@ fn hcl_completion_info_by_offset<'a, 'b>(
             .root_node()
             .descendant_for_byte_range(offset, offset)?;
         anchor_node = hcl::AnchorNode::from_node(node)?;
-        if anchor_node.0.is_error() {
+        if anchor_node.inner().is_error() {
             return None;
         }
     } else {
@@ -317,9 +235,8 @@ fn hcl_completion_info_by_offset<'a, 'b>(
             }
         }
     }
-
-    let parent_nodes = hcl_parent_nodes(anchor_node.0)?;
-    let path = hcl_identifier_path_of_nodes(text, &parent_nodes).ok()?;
+    let path =
+        hcl::identifier_path_of_nodes(text, &hcl::nodes_to_node(anchor_node.inner())).ok()?;
 
     Some(CompletionInfo {
         path,
