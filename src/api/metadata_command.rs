@@ -1,5 +1,6 @@
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
+use tower_lsp::lsp_types::CompletionItemKind;
 
 #[derive(Debug, Clone, Deserialize, Default, Serialize)]
 pub struct Command {
@@ -250,6 +251,41 @@ pub struct AdditionalPropSchema {
 pub struct AdditionalPropItemSchema {
     #[serde(rename = "type")]
     pub type_: String,
+}
+
+impl Schema {
+    pub fn to_hover_content(&self) -> String {
+        format!(
+            "{} *{}*, {}",
+            self.name.clone().unwrap_or("unknown".to_string()),
+            if self.required.unwrap_or(false) {
+                "required"
+            } else {
+                "optional"
+            },
+            self.type_
+        )
+    }
+
+    pub fn to_completion_item(&self) -> tower_lsp::lsp_types::CompletionItem {
+        tower_lsp::lsp_types::CompletionItem {
+            label: self.name.clone().unwrap_or("unknown".to_string()),
+            kind: Some(CompletionItemKind::PROPERTY),
+            detail: Some(format!(
+                "{}, {}",
+                if self.required.unwrap_or(false) {
+                    "required"
+                } else {
+                    "optional"
+                },
+                self.type_
+            )),
+            documentation: Some(tower_lsp::lsp_types::Documentation::String(
+                "document".to_string(),
+            )),
+            ..Default::default()
+        }
+    }
 }
 
 impl Operation {

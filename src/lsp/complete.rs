@@ -1,19 +1,22 @@
 use crate::{api::metadata_command::Operation, lsp::hcl};
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
+use tower_lsp::lsp_types::CompletionItem;
 use tree_sitter::Tree;
 
 #[derive(Clone, Debug)]
 pub struct CompletionInfo<'a> {
     // The identifier path from the top to the parent identifier node, if any
     pub path: Vec<&'a str>,
-    // The existing sibling identifiers
-    // TODO: we shall allow repeatable indentities
-    pub exist_idents: Vec<&'a str>,
 }
 
 impl<'a> CompletionInfo<'a> {
-    pub fn new(path: Vec<&'a str>, exist_idents: Vec<&'a str>) -> Self {
-        Self { path, exist_idents }
+    fn new(path: Vec<&'a str>) -> Self {
+        Self { path }
+    }
+
+    fn build_completion_items(&self, operation: &Operation) -> Option<Vec<CompletionItem>> {
+        let schema = operation.schema_by_path(&self.path)?;
+        let props = &schema.props.as_ref()?;
+        Some(props.iter().map(|prop| prop.to_completion_item()).collect())
     }
 }
 
@@ -25,28 +28,7 @@ pub fn get_completion_items<'a, 'b>(
     operation: &'b Operation,
 ) -> Option<Vec<CompletionItem>> {
     let comp_info = completion_info_by_offset(text, offset, syntax_ts, last_syntax_ts)?;
-    tracing::info!("comp_info: {comp_info:#?}");
-    let schema = operation.schema_by_path(&comp_info.path)?;
-    let props = &schema.props.as_ref()?;
-    Some(
-        props
-            .iter()
-            .filter(|prop| {
-                if let Some(name) = &prop.name {
-                    !comp_info.exist_idents.contains(&name.as_str())
-                } else {
-                    false
-                }
-            })
-            .map(|prop| CompletionItem {
-                label: prop.name.as_ref().unwrap().clone(),
-                kind: Some(CompletionItemKind::FIELD),
-                detail: Some("<detail>".to_string()),
-                documentation: Some(Documentation::String("<documentation>".to_string())),
-                ..Default::default()
-            })
-            .collect(),
-    )
+    comp_info.build_completion_items(operation)
 }
 
 // completion_info_by_offset returns the completion info.
@@ -109,8 +91,5 @@ fn completion_info_by_offset<'a>(
     let path =
         hcl::identifier_path_of_nodes(text, &hcl::nodes_to_node(anchor_node.inner())).ok()?;
 
-    Some(CompletionInfo::new(
-        path,
-        vec![], // TODO
-    ))
+    Some(CompletionInfo::new(path))
 }

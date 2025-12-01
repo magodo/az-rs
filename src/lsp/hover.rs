@@ -38,7 +38,7 @@ pub fn get_hover_info(
         },
     });
     Some(HoverInfo {
-        content: schema.name.as_ref()?.clone(),
+        content: schema.to_hover_content(),
         range: range,
     })
 }
