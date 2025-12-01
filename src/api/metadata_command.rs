@@ -252,6 +252,41 @@ pub struct AdditionalPropItemSchema {
     pub type_: String,
 }
 
+impl Operation {
+    pub fn schema_by_path(&self, paths: &[&str]) -> Option<&Schema> {
+        let Some(mut schema) = self
+            .http
+            .as_ref()
+            .and_then(|http| http.request.body.as_ref())
+            .and_then(|body| body.json.schema.as_ref())
+        else {
+            return None;
+        };
+
+        let mut found = true;
+        for path in paths {
+            if let Some(next_schema) = schema.props.as_ref().and_then(|props| {
+                props.iter().find(|prop| {
+                    if let Some(name) = prop.name.as_ref() {
+                        name == path
+                    } else {
+                        false
+                    }
+                })
+            }) {
+                schema = next_schema;
+            } else {
+                found = false;
+                break;
+            };
+        }
+        if !found {
+            return None;
+        }
+        return Some(schema);
+    }
+}
+
 impl Command {
     pub fn select_operation(&self, cond: Option<&String>) -> Option<&Operation> {
         if let Some(cond) = cond {

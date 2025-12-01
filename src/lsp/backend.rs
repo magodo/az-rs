@@ -8,9 +8,9 @@ use tower_lsp::{
     lsp_types::{
         ClientInfo, CompletionOptions, CompletionParams, CompletionResponse,
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
-        HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MarkupContent, MarkupKind, PositionEncodingKind, ServerCapabilities,
-        TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+        HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, PositionEncodingKind, ServerCapabilities, TextDocumentSyncCapability,
+        TextDocumentSyncKind, Url,
     },
     Client, LanguageServer,
 };
@@ -164,19 +164,9 @@ impl LanguageServer for Backend {
         let Some(document) = documents.get(&doc.uri) else {
             return Ok(None);
         };
-        if let Some(text) = document.hover(
+        Ok(document.hover(
             &self.operation,
             &params.text_document_position_params.position,
-        ) {
-            Ok(Some(Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: text,
-                }),
-                range: None,
-            }))
-        } else {
-            Ok(None)
-        }
+        ))
     }
 }

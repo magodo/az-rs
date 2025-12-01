@@ -1,4 +1,5 @@
-use crate::lsp::hcl;
+use crate::{api::metadata_command::Operation, lsp::hcl};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
 use tree_sitter::Tree;
 
 #[derive(Clone, Debug)]
@@ -10,13 +11,51 @@ pub struct CompletionInfo<'a> {
     pub exist_idents: Vec<&'a str>,
 }
 
-// completion_info_by_offset returns the completion info.
-// TODO: Complete dones't work correctly for object type. Hence suggest to use block instead.
-pub fn completion_info_by_offset<'a, 'b>(
+impl<'a> CompletionInfo<'a> {
+    pub fn new(path: Vec<&'a str>, exist_idents: Vec<&'a str>) -> Self {
+        Self { path, exist_idents }
+    }
+}
+
+pub fn get_completion_items<'a, 'b>(
     text: &'a [u8],
     offset: usize,
-    syntax_ts: &'b Tree,
-    last_syntax_ts: &'b Tree,
+    syntax_ts: &'a Tree,
+    last_syntax_ts: &'a Tree,
+    operation: &'b Operation,
+) -> Option<Vec<CompletionItem>> {
+    let comp_info = completion_info_by_offset(text, offset, syntax_ts, last_syntax_ts)?;
+    tracing::info!("comp_info: {comp_info:#?}");
+    let schema = operation.schema_by_path(&comp_info.path)?;
+    let props = &schema.props.as_ref()?;
+    Some(
+        props
+            .iter()
+            .filter(|prop| {
+                if let Some(name) = &prop.name {
+                    !comp_info.exist_idents.contains(&name.as_str())
+                } else {
+                    false
+                }
+            })
+            .map(|prop| CompletionItem {
+                label: prop.name.as_ref().unwrap().clone(),
+                kind: Some(CompletionItemKind::FIELD),
+                detail: Some("<detail>".to_string()),
+                documentation: Some(Documentation::String("<documentation>".to_string())),
+                ..Default::default()
+            })
+            .collect(),
+    )
+}
+
+// completion_info_by_offset returns the completion info.
+// TODO: Complete dones't work correctly for object type. Hence suggest to use block instead.
+fn completion_info_by_offset<'a>(
+    text: &'a [u8],
+    offset: usize,
+    syntax_ts: &'a Tree,
+    last_syntax_ts: &'a Tree,
 ) -> Option<CompletionInfo<'a>> {
     let mut anchor_node;
 
@@ -63,8 +102,8 @@ pub fn completion_info_by_offset<'a, 'b>(
     let path =
         hcl::identifier_path_of_nodes(text, &hcl::nodes_to_node(anchor_node.inner())).ok()?;
 
-    Some(CompletionInfo {
+    Some(CompletionInfo::new(
         path,
-        exist_idents: vec![], // TODO
-    })
+        vec![], // TODO
+    ))
 }

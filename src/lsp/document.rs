@@ -3,12 +3,12 @@ use anyhow::Result;
 use hcl_edit::{parser, structure};
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, Documentation,
-    NumberOrString, Position, TextDocumentContentChangeEvent,
+    CompletionItem, Diagnostic, DiagnosticSeverity, Hover, HoverContents, MarkupContent,
+    MarkupKind, NumberOrString, Position, TextDocumentContentChangeEvent,
 };
 use tree_sitter::{Parser, Tree};
 
-use crate::api::metadata_command::{Operation, Schema};
+use crate::api::metadata_command::Operation;
 
 pub struct Document {
     text: IndexedText<String>,
@@ -56,7 +56,7 @@ impl Document {
         self.syntax_hcl = parser::parse_body(self.text.text());
     }
 
-    pub fn hover(&self, operation: &Operation, position: &Position) -> Option<String> {
+    pub fn hover(&self, operation: &Operation, position: &Position) -> Option<Hover> {
         let syntax_ts = self.syntax_ts.as_ref()?;
         let pos = self.text.lsp_pos_to_pos(position)?;
         let offset = self.text.pos_to_offset(&pos)?;
@@ -65,9 +65,15 @@ impl Document {
         if paths.is_empty() {
             return None;
         }
-        let schema = api_schema_by_path(operation, &paths)?;
+        let schema = operation.schema_by_path(&paths)?;
         tracing::debug!("Hover result: {:#?}", schema.name);
-        return schema.name.clone();
+        return Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: schema.name.clone()?,
+            }),
+            range: None,
+        });
     }
 
     pub fn complete(
@@ -79,33 +85,12 @@ impl Document {
         let last_syntax_ts = self.last_syntax_ts.as_ref()?;
         let pos = self.text.lsp_pos_to_pos(position)?;
         let offset = self.text.pos_to_offset(&pos)?;
-        let comp_info = complete::completion_info_by_offset(
+        complete::get_completion_items(
             self.text.text().as_bytes(),
             offset,
             syntax_ts,
             last_syntax_ts,
-        )?;
-        tracing::info!("comp_info: {comp_info:#?}");
-        let schema = api_schema_by_path(operation, &comp_info.path)?;
-        let props = &schema.props.as_ref()?;
-        Some(
-            props
-                .iter()
-                .filter(|prop| {
-                    if let Some(name) = &prop.name {
-                        !comp_info.exist_idents.contains(&name.as_str())
-                    } else {
-                        false
-                    }
-                })
-                .map(|prop| CompletionItem {
-                    label: prop.name.as_ref().unwrap().clone(),
-                    kind: Some(CompletionItemKind::FIELD),
-                    detail: Some("<detail>".to_string()),
-                    documentation: Some(Documentation::String("<documentation>".to_string())),
-                    ..Default::default()
-                })
-                .collect(),
+            operation,
         )
     }
 
@@ -141,37 +126,4 @@ impl Document {
         //tracing::debug!("diag: {diag:#?}");
         return vec![diag];
     }
-}
-
-fn api_schema_by_path<'a>(operation: &'a Operation, paths: &[&str]) -> Option<&'a Schema> {
-    let Some(mut schema) = operation
-        .http
-        .as_ref()
-        .and_then(|http| http.request.body.as_ref())
-        .and_then(|body| body.json.schema.as_ref())
-    else {
-        return None;
-    };
-
-    let mut found = true;
-    for path in paths {
-        if let Some(next_schema) = schema.props.as_ref().and_then(|props| {
-            props.iter().find(|prop| {
-                if let Some(name) = prop.name.as_ref() {
-                    name == path
-                } else {
-                    false
-                }
-            })
-        }) {
-            schema = next_schema;
-        } else {
-            found = false;
-            break;
-        };
-    }
-    if !found {
-        return None;
-    }
-    return Some(schema);
 }
