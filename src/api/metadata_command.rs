@@ -218,8 +218,6 @@ pub struct Response {
 pub struct Output {
     #[serde(rename = "type")]
     pub type_: String,
-    #[serde(rename = "ref")]
-    pub ref_: String,
     #[serde(rename = "clientFlatten")]
     pub client_flatten: Option<bool>,
 }
@@ -229,6 +227,7 @@ pub struct Schema {
     #[serde(rename = "type")]
     pub type_: String,
     pub name: Option<String>,
+    pub description: Option<String>,
     pub required: Option<bool>,
     pub arg: Option<String>,
     #[serde(rename = "readOnly")]
@@ -269,7 +268,7 @@ impl Schema {
 
     pub fn to_completion_item(&self) -> tower_lsp::lsp_types::CompletionItem {
         tower_lsp::lsp_types::CompletionItem {
-            label: self.name.clone().unwrap_or("unknown".to_string()),
+            label: self.name.clone().unwrap_or("".to_string()),
             kind: Some(CompletionItemKind::PROPERTY),
             detail: Some(format!(
                 "{}, {}",
@@ -281,7 +280,7 @@ impl Schema {
                 self.type_
             )),
             documentation: Some(tower_lsp::lsp_types::Documentation::String(
-                "document".to_string(),
+                self.description.clone().unwrap_or("".to_string()),
             )),
             ..Default::default()
         }
@@ -400,11 +399,7 @@ mod test {
                         .into_iter()
                         .filter_map(|(k, v)| {
                             let v = strip_nulls(v);
-                            if v.is_null() {
-                                None
-                            } else {
-                                Some((k, v))
-                            }
+                            if v.is_null() { None } else { Some((k, v)) }
                         })
                         .collect();
                     Value::Object(cleaned)
@@ -584,22 +579,26 @@ mod test {
               "schema": {
                 "type": "object",
                 "name": "parameters",
+                "description": "description...",
                 "required": true,
                 "props": [
                   {
                     "type": "ResourceLocation",
                     "name": "location",
+                    "description": "description...",
                     "arg": "$parameters.location",
                     "required": true
                   },
                   {
                     "type": "string",
                     "name": "managedBy",
+                    "description": "description...",
                     "arg": "$parameters.managedBy"
                   },
                   {
                     "type": "object",
                     "name": "tags",
+                    "description": "description...",
                     "arg": "$parameters.tags",
                     "additionalProps": {
                       "item": {
