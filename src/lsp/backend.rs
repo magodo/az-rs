@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    default,
     sync::{Arc, RwLock},
 };
 
@@ -9,13 +10,15 @@ use tower_lsp::{
         ClientInfo, CompletionOptions, CompletionParams, CompletionResponse,
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
         HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, PositionEncodingKind, ServerCapabilities, TextDocumentSyncCapability,
+        InitializedParams, PositionEncodingKind, SemanticTokenType, SemanticTokensLegend,
+        SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+        SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
         TextDocumentSyncKind, Url,
     },
     Client, LanguageServer,
 };
 
-use crate::api::metadata_command::Operation;
+use crate::{api::metadata_command::Operation, lsp::semantic_tokens};
 
 use super::document::Document;
 
@@ -78,6 +81,20 @@ impl LanguageServer for Backend {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: semantic_tokens::semantic_token_types()
+                                    .iter()
+                                    .map(|t| SemanticTokenType::from(t.to_string()))
+                                    .collect(),
+                                token_modifiers: vec![],
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                ),
                 ..Default::default()
             },
             ..Default::default()
@@ -168,5 +185,21 @@ impl LanguageServer for Backend {
             &self.operation,
             &params.text_document_position_params.position,
         ))
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        tracing::debug!("message received");
+        tracing::trace!(?params);
+
+        let doc = params.text_document;
+        let documents = self.documents.read().unwrap();
+        let Some(document) = documents.get(&doc.uri) else {
+            return Ok(None);
+        };
+        Ok(document.semantic_tokens_full())
     }
 }

@@ -1,12 +1,13 @@
-use crate::lsp::{complete, hover};
+use crate::lsp::{complete, hover, semantic_tokens::SemanticTokenType};
 use anyhow::Result;
 use hcl_edit::{parser, structure};
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 use tower_lsp::lsp_types::{
     CompletionItem, Diagnostic, DiagnosticSeverity, Hover, HoverContents, MarkupContent,
-    MarkupKind, NumberOrString, Position, TextDocumentContentChangeEvent,
+    MarkupKind, NumberOrString, Position, SemanticToken, SemanticTokens, SemanticTokensResult,
+    TextDocumentContentChangeEvent,
 };
-use tree_sitter::{Parser, Tree};
+use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::api::metadata_command::Operation;
 
@@ -68,6 +69,44 @@ impl Document {
             }),
             range: hover_info.range,
         });
+    }
+
+    pub fn semantic_tokens_full(&self) -> Option<SemanticTokensResult> {
+        let mut data: Vec<SemanticToken> = vec![SemanticToken {
+            delta_line: 0,
+            delta_start: 0,
+            length: 10,
+            token_type: 0,
+            token_modifiers_bitset: 0,
+        }];
+        let mut cursor = self.syntax_ts.as_ref()?.walk();
+        loop {
+            let node = cursor.node();
+            println!("Node: {:?} {:?}", node.kind(), node.range());
+
+            // Try to go to first child → recurse deeper
+            if cursor.goto_first_child() {
+                continue;
+            }
+
+            // Otherwise, go to next sibling
+            if cursor.goto_next_sibling() {
+                continue;
+            }
+
+            // Otherwise, climb back up until we can go to a sibling
+            loop {
+                if !cursor.goto_parent() {
+                    return Some(SemanticTokensResult::Tokens(SemanticTokens {
+                        result_id: None,
+                        data,
+                    })); // done traversing
+                }
+                if cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
     }
 
     pub fn complete(
