@@ -254,7 +254,7 @@ pub struct AdditionalPropItemSchema {
 
 impl Schema {
     pub fn to_hover_content(&self) -> String {
-        format!(
+        let mut content = format!(
             "{} *{}*, {}",
             self.name.clone().unwrap_or("unknown".to_string()),
             if self.required.unwrap_or(false) {
@@ -263,7 +263,11 @@ impl Schema {
                 "optional"
             },
             self.type_
-        )
+        );
+        if let Some(ref desc) = self.description {
+            content = content + "\n\n" + &desc;
+        }
+        content
     }
 
     pub fn to_completion_item(&self) -> tower_lsp::lsp_types::CompletionItem {
