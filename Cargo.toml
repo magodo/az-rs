@@ -40,8 +40,6 @@ tempfile = "3.23.0"
 tower-lsp = "0.20.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
-tree-sitter = "0.25.10"
-tree-sitter-hcl = "1.1.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
@@ -54,6 +52,8 @@ rust-embed = { version = "8.7.2", features = ["debug-embed"], optional = true }
 tokio = { version = "1.45.1", features = ["io-std"] }
 typespec_client_core = { version = "0.7.0", features = ["tokio"] }
 uuid = { version = "1", features = ["v4"] }
+tree-sitter = "0.25.10"
+tree-sitter-hcl = "1.1.0"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 console_error_panic_hook = { version = "0.1.7" }
