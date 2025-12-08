@@ -697,7 +697,6 @@ mod test {
   "outputs": [
     {
       "type": "object",
-      "ref": "$Instance",
       "clientFlatten": true
     }
   ],
