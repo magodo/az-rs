@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::metadata_command::ArgGroup;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::builder::PossibleValue;
 
 pub struct CLIExpander {
@@ -72,7 +72,7 @@ impl CLIExpander {
                                 if let Some(option_name) = arg.options.first() {
                                     let prefix = if option_name.len() == 1 { "-" } else { "--" };
                                     cli_inputs.push(format!("{prefix}{}", option_name.clone()));
-                                    cli_inputs.push(self.shell.escape(&val.to_string()));
+                                    cli_inputs.push(self.shell.escape(val));
                                 }
                             }
                         }
@@ -132,11 +132,17 @@ impl Shell {
         .into_iter()
     }
 
-    fn escape(&self, arg: &str) -> String {
+    fn escape(&self, arg: &serde_json::Value) -> String {
+        let chars: Vec<_> = if arg.is_string() {
+            arg.as_str().unwrap().chars().collect()
+        } else {
+            arg.to_string().chars().collect()
+        };
         match self {
             Shell::Unix => {
-                let mut out = String::from(r#"""#);
-                for c in arg.chars() {
+                let mut out = String::new();
+                out.push('"');
+                for c in chars {
                     if c == '"' {
                         out.push('\\'); // escape `"` by `\"`
                     }
@@ -146,8 +152,9 @@ impl Shell {
                 out
             }
             Shell::PowerShell | Shell::Cmd => {
-                let mut out = String::from(r#"""#);
-                for c in arg.chars() {
+                let mut out = String::new();
+                out.push('"');
+                for c in chars {
                     if c == '"' {
                         out.push('"'); // escape `"` by `""`
                     }
@@ -179,61 +186,99 @@ mod tests {
 
     #[test]
     fn test_unix_escape_simple() {
-        assert_eq!(Shell::Unix.escape("foo"), r#""foo""#);
+        assert_eq!(Shell::Unix.escape(&serde_json::json!("foo")), "\"foo\"");
     }
 
     #[test]
     fn test_unix_escape_with_space() {
-        assert_eq!(Shell::Unix.escape("foo bar"), r#""foo bar""#);
+        assert_eq!(
+            Shell::Unix.escape(&serde_json::json!("foo bar")),
+            r#""foo bar""#
+        );
     }
 
     #[test]
     fn test_unix_escape_with_quote() {
-        assert_eq!(Shell::Unix.escape("foo'bar"), r#""foo'bar""#);
+        assert_eq!(
+            Shell::Unix.escape(&serde_json::json!("foo'bar")),
+            r#""foo'bar""#
+        );
     }
 
     #[test]
     fn test_unix_escape_with_double_quote() {
-        assert_eq!(Shell::Unix.escape(r#"foo"bar"#), r#""foo\"bar""#);
+        assert_eq!(
+            Shell::Unix.escape(&serde_json::json!(r#"foo"bar"#)),
+            r#""foo\"bar""#
+        );
+    }
+
+    #[test]
+    fn test_unix_escape_with_double_quote_in_object() {
+        assert_eq!(
+            Shell::Unix.escape(&serde_json::json!({"a\"b": 123})),
+            r#""{\"a\\"b\":123}""#
+        );
     }
 
     #[test]
     fn test_cmd_escape_simple() {
-        assert_eq!(Shell::Cmd.escape("foo"), r#""foo""#);
+        assert_eq!(Shell::Cmd.escape(&serde_json::json!("foo")), r#""foo""#);
     }
 
     #[test]
     fn test_cmd_escape_with_space() {
-        assert_eq!(Shell::Cmd.escape("foo bar"), r#""foo bar""#);
+        assert_eq!(
+            Shell::Cmd.escape(&serde_json::json!("foo bar")),
+            r#""foo bar""#
+        );
     }
 
     #[test]
     fn test_cmd_escape_with_quote() {
-        assert_eq!(Shell::Cmd.escape("foo'bar"), r#""foo'bar""#);
+        assert_eq!(
+            Shell::Cmd.escape(&serde_json::json!("foo'bar")),
+            r#""foo'bar""#
+        );
     }
 
     #[test]
     fn test_cmd_escape_with_double_quote() {
-        assert_eq!(Shell::Cmd.escape(r#"foo"bar"#), r#""foo""bar""#);
+        assert_eq!(
+            Shell::Cmd.escape(&serde_json::json!(r#"foo"bar"#)),
+            r#""foo""bar""#
+        );
     }
 
     #[test]
     fn test_powershell_escape_simple() {
-        assert_eq!(Shell::PowerShell.escape("foo"), r#""foo""#);
+        assert_eq!(
+            Shell::PowerShell.escape(&serde_json::json!("foo")),
+            r#""foo""#
+        );
     }
 
     #[test]
     fn test_powershell_escape_with_space() {
-        assert_eq!(Shell::PowerShell.escape("foo bar"), r#""foo bar""#);
+        assert_eq!(
+            Shell::PowerShell.escape(&serde_json::json!("foo bar")),
+            r#""foo bar""#
+        );
     }
 
     #[test]
     fn test_powershell_escape_with_quote() {
-        assert_eq!(Shell::PowerShell.escape("foo'bar"), r#""foo'bar""#);
+        assert_eq!(
+            Shell::PowerShell.escape(&serde_json::json!("foo'bar")),
+            r#""foo'bar""#
+        );
     }
 
     #[test]
     fn test_powershell_escape_with_double_quote() {
-        assert_eq!(Shell::PowerShell.escape(r#"foo"bar"#), r#""foo""bar""#);
+        assert_eq!(
+            Shell::PowerShell.escape(&serde_json::json!(r#"foo"bar"#)),
+            r#""foo""bar""#
+        );
     }
 }
