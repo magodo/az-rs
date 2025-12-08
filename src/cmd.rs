@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
-use crate::api::{ApiManager, metadata_command, metadata_index};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
-use clap::{Arg, Command, command};
+use clap::{command, Arg, Command};
 
 pub fn cmd() -> Command {
     cmd_base().subcommands([
@@ -226,7 +226,6 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         .iter()
         .filter(|ag| ag.name == "")
         .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
-
     command
         .arg_groups
         .iter()
@@ -236,7 +235,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
     out
 }
 
-fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
+fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;
@@ -272,9 +271,13 @@ fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
     if let Some(help) = &arg.help {
         out = out.help(help.short.clone());
     }
-    if handle_required {
+    if is_default_group {
+        // "$parameters.id" corresponds to the "--id"
+        out = out.conflicts_with("$parameters.id");
         if let Some(required) = arg.required {
-            out = out.required(required);
+            if required {
+                out = out.required_unless_present("$parameters.id");
+            }
         }
     }
 
