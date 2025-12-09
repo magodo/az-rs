@@ -1,3 +1,5 @@
+use crate::cmd;
+
 use super::metadata_command::{Operation, Schema};
 use anyhow::{bail, Result};
 use clap::ArgMatches;
@@ -36,16 +38,32 @@ impl OperationInvocation {
 
         let http = self.operation.http.as_ref().unwrap();
         let mut path = http.path.clone();
-        for param in &http.request.path.params {
-            if let Some(value) = self.matches.get_one::<String>(&param.arg) {
-                path = path.replace(&format!("{{{}}}", param.name), value);
-            } else if let Some(true) = param.required {
-                bail!("missing required path parameter: {}", param.name);
-            } else {
-                unreachable!(
-                    r#"optional path parameter "{}" not supported yet!"#,
-                    param.name
-                )
+
+        // In case the "--path" is specified, we validate and use it.
+        if let Some(path_arg) = self.matches.get_one::<String>(cmd::PATH_OPTION) {
+            path = path_arg.clone();
+            let arg_segs: Vec<_> = path_arg.split('/').collect();
+            let metadata_segs: Vec<_> = path.split('/').collect();
+            if arg_segs.len() != metadata_segs.len() {
+                bail!(r#"invalid value for option "{}""#, cmd::PATH_OPTION);
+            }
+            for (a, m) in arg_segs.iter().zip(metadata_segs) {
+                if m != "{}" && *a != m {
+                    bail!(r#"invalid value for option "{}""#, cmd::PATH_OPTION);
+                }
+            }
+        } else {
+            for param in &http.request.path.params {
+                if let Some(value) = self.matches.get_one::<String>(&param.arg) {
+                    path = path.replace(&format!("{{{}}}", param.name), value);
+                } else if let Some(true) = param.required {
+                    bail!("missing required path parameter: {}", param.name);
+                } else {
+                    unreachable!(
+                        r#"optional path parameter "{}" not supported yet!"#,
+                        param.name
+                    )
+                }
             }
         }
         let mut query_pairs = HashMap::new();

@@ -6,6 +6,8 @@ use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
+pub const PATH_OPTION: &str = "path";
+
 pub fn cmd() -> Command {
     cmd_base().subcommands([
         Command::new("lsp").about("Start the LSP server."),
@@ -182,6 +184,8 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
 fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
 
+    // General optional arguments
+
     // Build the api-version arg
     out.push(
         Arg::new("api-version")
@@ -215,22 +219,47 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         Arg::new("print-cli")
             .long("print-cli")
             .value_parser(PossibleValuesParser::new(Shell::variants()))
-            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with `--file` or `--edit`"#),
+            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with "--file" or "--edit""#),
     );
 
-    // Build the remaining arguments based on the command metadata.
+    // Required options comes
+
+    // The default argument group, which *mostly* (except for List API metadata where the resource group can be optional)
+    // contains the required arguments (e.g. name, resource group name, subscription name).
+    let mut default_args = vec![];
+    command
+        .arg_groups
+        .iter()
+        .filter(|ag| ag.name == "") // Indicates the default argument group
+        .for_each(|ag| default_args.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+
+    // Build the api path arg when there is a default argument group.
+    // The "path" can be specified instead of the required default argument group above.
+    if !default_args.is_empty() {
+        out.push(Arg::new(PATH_OPTION).long(PATH_OPTION).help(format!(
+                "The complete API path. This conflicts with the options {:?}",
+                default_args
+                    .iter()
+                    .filter_map(|arg| arg.get_long())
+                    .collect::<Vec<_>>(),
+            )));
+    }
+    out.extend(default_args);
+
+    // Build the remaining optional arguments based on the command metadata.
     // NOTE: Only the top level arg groups are exposed.
-    // NOTE: Only the default argument group (which contains the path segments) will be considered for required or not.
     command
         .arg_groups
         .iter()
-        .filter(|ag| ag.name == "")
-        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
-    command
-        .arg_groups
-        .iter()
-        .filter(|ag| ag.name != "")
-        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
+        .filter(|arg| arg.name != "")
+        .for_each(|ag| {
+            out.extend(
+                ag.args
+                    .iter()
+                    .filter(|arg| !arg.hide.unwrap_or(false)) // Skip the hidden argument, e.g. "id"
+                    .map(|arg| build_arg(arg, false)),
+            )
+        });
 
     out
 }
@@ -268,15 +297,19 @@ fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
     if let Some(long) = long {
         out = out.long(long);
     }
+
     if let Some(help) = &arg.help {
-        out = out.help(help.short.clone());
+        let mut msg = help.short.clone();
+        if is_default_group {
+            msg += format!(r#" This conflicts with the "{}""#, PATH_OPTION).as_str();
+        }
+        out = out.help(msg);
     }
     if is_default_group {
-        // "$parameters.id" corresponds to the "--id"
-        out = out.conflicts_with("$parameters.id");
+        out = out.conflicts_with(PATH_OPTION);
         if let Some(required) = arg.required {
             if required {
-                out = out.required_unless_present("$parameters.id");
+                out = out.required_unless_present(PATH_OPTION);
             }
         }
     }

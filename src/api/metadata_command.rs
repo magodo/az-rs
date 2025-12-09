@@ -85,6 +85,7 @@ pub struct Arg {
     pub id_part: Option<String>,
     #[serde(rename = "additionalProps")]
     pub additional_props: Option<AdditionalPropSchema>,
+    pub hide: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
