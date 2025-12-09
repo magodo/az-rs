@@ -1,8 +1,8 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use api::{
+    ApiManager,
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
-    ApiManager,
 };
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
@@ -143,7 +143,7 @@ fn get_file(p: &PathBuf) -> Result<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn edit(_: &String, _: &str, _: &str, _: Option<&str>) -> Result<String> {
+fn edit(_: &String, _: &str, _: &str, _: Option<&String>) -> Result<String> {
     Err(anyhow!(r#""--edit" is not supported on wasm32"#))
 }
 

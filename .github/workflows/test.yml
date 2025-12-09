@@ -1,0 +1,28 @@
+name: Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Build
+      run: cargo build --verbose
+    - name: Build (WASM32)
+      run: |
+        cargo install wasm-pack
+        RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web
+    - name: Run tests
+      run: cargo test --verbose
