@@ -39,7 +39,7 @@ pub async fn serve() {
         .expect("read api command");
 
     let cond = env::var(LSP_CMD_CONDITION).ok();
-    let Some(operation) = cmd.select_operation(cond.as_ref()) else {
+    let Some(operation) = cmd.select_operation_by_cond(cond.as_ref()) else {
         panic!("failed to select the API operation");
     };
 

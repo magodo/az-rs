@@ -1,7 +1,7 @@
 use crate::cmd;
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -37,30 +37,14 @@ impl OperationInvocation {
         }
 
         let http = self.operation.http.as_ref().unwrap();
-        let mut path = http.path.clone();
-
+        let mut path;
         // In case the "--path" is specified, we validate and use it.
         if let Some(path_arg) = self.matches.get_one::<String>(cmd::PATH_OPTION) {
-            let arg_segs: Vec<_> = path_arg
-                .to_uppercase()
-                .split('/')
-                .map(String::from)
-                .collect();
-            let metadata_segs: Vec<_> = path.to_uppercase().split('/').map(String::from).collect();
-            if arg_segs.len() != metadata_segs.len() {
-                bail!(r#"invalid value for option "{}""#, cmd::PATH_OPTION);
-            }
-            for (a, m) in arg_segs.iter().zip(metadata_segs) {
-                if !m.starts_with("{") && *a != m {
-                    bail!(
-                        r#"invalid value for option "{}": {} != {}"#,
-                        cmd::PATH_OPTION,
-                        *a,
-                        m
-                    );
-                }
-            }
+            let api_path = cmd::APIPath::from(path_arg);
+            api_path.validate_pattern(&http.path)?;
+            path = path_arg.clone();
         } else {
+            path = http.path.clone();
             for param in &http.request.path.params {
                 if let Some(value) = self.matches.get_one::<String>(&param.arg) {
                     path = path.replace(&format!("{{{}}}", param.name), value);

@@ -1,12 +1,54 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
-use crate::api::{ApiManager, metadata_command, metadata_index};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
+use anyhow::{bail, Result};
 use clap::builder::PossibleValuesParser;
-use clap::{Arg, Command, command};
+use clap::{command, Arg, Command};
 
 pub const PATH_OPTION: &str = "path";
+
+pub struct APIPath(String);
+
+impl<S> From<S> for APIPath
+where
+    S: AsRef<str>,
+{
+    fn from(value: S) -> Self {
+        let value = String::from(value.as_ref());
+        let value = value.trim_end_matches('/').to_string();
+        Self(value)
+    }
+}
+
+impl APIPath {
+    pub fn validate_pattern(&self, pattern: &str) -> Result<()> {
+        let arg_segs: Vec<_> = self.0.to_uppercase().split('/').map(String::from).collect();
+        let pattern_segs: Vec<_> = pattern
+            .to_uppercase()
+            .split('/')
+            .map(String::from)
+            .collect();
+        if arg_segs.len() != pattern_segs.len() {
+            bail!(
+                "api path has unexpected length: expect={}, got={}",
+                pattern_segs.len(),
+                arg_segs.len()
+            );
+        }
+        for (arg_seg, pattern_seg) in arg_segs.iter().zip(pattern_segs) {
+            if !pattern_seg.starts_with("{") && *arg_seg != pattern_seg {
+                bail!(
+                    r#"api path contains unexpected segment: expect={}, got={}"#,
+                    pattern_seg,
+                    *arg_seg,
+                );
+            }
+        }
+        return Ok(());
+    }
+}
 
 pub fn cmd() -> Command {
     cmd_base().subcommands([

@@ -1,8 +1,8 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use api::{
-    ApiManager,
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
+    ApiManager,
 };
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
@@ -60,7 +60,7 @@ where
             let cmd_metadata = api_manager.read_command(&command_file)?;
             let cmd_cond = cmd_metadata.match_condition(&matches);
             let operation = cmd_metadata
-                .select_operation(cmd_cond.as_ref())
+                .select_operation_by_cond(cmd_cond.as_ref())
                 .ok_or(anyhow!("no operation is selected"))?;
 
             let mut hcl_body = None;
