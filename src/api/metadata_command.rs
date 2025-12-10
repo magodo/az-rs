@@ -2,6 +2,8 @@ use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::CompletionItemKind;
 
+use crate::cmd;
+
 #[derive(Debug, Clone, Deserialize, Default, Serialize)]
 pub struct Command {
     #[serde(rename = "argGroups")]
@@ -85,6 +87,7 @@ pub struct Arg {
     pub id_part: Option<String>,
     #[serde(rename = "additionalProps")]
     pub additional_props: Option<AdditionalPropSchema>,
+    pub hide: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -327,7 +330,7 @@ impl Operation {
 }
 
 impl Command {
-    pub fn select_operation(&self, cond: Option<&String>) -> Option<&Operation> {
+    pub fn select_operation_by_cond(&self, cond: Option<&String>) -> Option<&Operation> {
         if let Some(cond) = cond {
             self.operations
                 .iter()
@@ -345,12 +348,27 @@ impl Command {
         if self.conditions.is_none() {
             return None;
         }
-        self.conditions
-            .as_ref()
-            .unwrap()
-            .iter()
-            .find(|&c| self.match_operator(&c.operator, matches))
-            .map(|c| c.var.clone())
+        if let Some(path) = matches.get_one::<String>(cmd::PATH_OPTION) {
+            let api_path = cmd::APIPath::from(path);
+            self.operations
+                .iter()
+                .find(|op| {
+                    op.http
+                        .as_ref()
+                        .map(|http| api_path.validate_pattern(&http.path).is_ok())
+                        .unwrap_or(false)
+                })
+                .and_then(|op| op.when.as_ref())
+                .and_then(|when| when.last())
+                .cloned()
+        } else {
+            self.conditions
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|&c| self.match_operator(&c.operator, matches))
+                .map(|c| c.var.clone())
+        }
     }
 
     fn match_operator(&self, operator: &ConditionOperator, matches: &ArgMatches) -> bool {
@@ -403,7 +421,11 @@ mod test {
                         .into_iter()
                         .filter_map(|(k, v)| {
                             let v = strip_nulls(v);
-                            if v.is_null() { None } else { Some((k, v)) }
+                            if v.is_null() {
+                                None
+                            } else {
+                                Some((k, v))
+                            }
                         })
                         .collect();
                     Value::Object(cleaned)

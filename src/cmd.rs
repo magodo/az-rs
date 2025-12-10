@@ -1,10 +1,54 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
-use crate::api::{ApiManager, metadata_command, metadata_index};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
+use anyhow::{bail, Result};
 use clap::builder::PossibleValuesParser;
-use clap::{Arg, Command, command};
+use clap::{command, Arg, Command};
+
+pub const PATH_OPTION: &str = "path";
+
+pub struct APIPath(String);
+
+impl<S> From<S> for APIPath
+where
+    S: AsRef<str>,
+{
+    fn from(value: S) -> Self {
+        let value = String::from(value.as_ref());
+        let value = value.trim_end_matches('/').to_string();
+        Self(value)
+    }
+}
+
+impl APIPath {
+    pub fn validate_pattern(&self, pattern: &str) -> Result<()> {
+        let arg_segs: Vec<_> = self.0.to_uppercase().split('/').map(String::from).collect();
+        let pattern_segs: Vec<_> = pattern
+            .to_uppercase()
+            .split('/')
+            .map(String::from)
+            .collect();
+        if arg_segs.len() != pattern_segs.len() {
+            bail!(
+                "api path has unexpected length: expect={}, got={}",
+                pattern_segs.len(),
+                arg_segs.len()
+            );
+        }
+        for (arg_seg, pattern_seg) in arg_segs.iter().zip(pattern_segs) {
+            if !pattern_seg.starts_with("{") && *arg_seg != pattern_seg {
+                bail!(
+                    r#"api path contains unexpected segment: expect={}, got={}"#,
+                    pattern_seg,
+                    *arg_seg,
+                );
+            }
+        }
+        return Ok(());
+    }
+}
 
 pub fn cmd() -> Command {
     cmd_base().subcommands([
@@ -182,6 +226,8 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
 fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
 
+    // General optional arguments
+
     // Build the api-version arg
     out.push(
         Arg::new("api-version")
@@ -215,28 +261,45 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         Arg::new("print-cli")
             .long("print-cli")
             .value_parser(PossibleValuesParser::new(Shell::variants()))
-            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with `--file` or `--edit`"#),
+            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with "--file" or "--edit""#),
     );
 
-    // Build the remaining arguments based on the command metadata.
-    // NOTE: Only the top level arg groups are exposed.
-    // NOTE: Only the default argument group (which contains the path segments) will be considered for required or not.
-    command
-        .arg_groups
-        .iter()
-        .filter(|ag| ag.name == "")
-        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+    // Required options comes
 
+    // The default argument group, which *mostly* (except for List API metadata where the resource group can be optional)
+    // contains the required arguments (e.g. name, resource group name, subscription name).
+    let mut default_args = vec![];
     command
         .arg_groups
         .iter()
-        .filter(|ag| ag.name != "")
+        .filter(|ag| ag.name == "") // Indicates the default argument group
+        .for_each(|ag| default_args.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+
+    // Build the api path arg when there is a default argument group.
+    // The "path" can be specified instead of the required default argument group above.
+    if !default_args.is_empty() {
+        out.push(Arg::new(PATH_OPTION).long(PATH_OPTION).help(format!(
+                "The complete API path. This conflicts with the options {:?}",
+                default_args
+                    .iter()
+                    .filter_map(|arg| arg.get_long())
+                    .collect::<Vec<_>>(),
+            )));
+    }
+    out.extend(default_args);
+
+    // Build the remaining optional arguments based on the command metadata.
+    // NOTE: Only the top level arg groups are exposed.
+    command
+        .arg_groups
+        .iter()
+        .filter(|arg| arg.name != "")
         .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
 
     out
 }
 
-fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
+fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;
@@ -269,12 +332,25 @@ fn build_arg(arg: &metadata_command::Arg, handle_required: bool) -> Arg {
     if let Some(long) = long {
         out = out.long(long);
     }
+
     if let Some(help) = &arg.help {
-        out = out.help(help.short.clone());
+        let mut msg = help.short.clone();
+        if is_default_group {
+            msg += format!(r#" This conflicts with the "{}""#, PATH_OPTION).as_str();
+        }
+        out = out.help(msg);
     }
-    if handle_required {
+
+    if let Some(hide) = arg.hide {
+        out = out.hide(hide);
+    }
+
+    if is_default_group {
+        out = out.conflicts_with(PATH_OPTION);
         if let Some(required) = arg.required {
-            out = out.required(required);
+            if required {
+                out = out.required_unless_present(PATH_OPTION);
+            }
         }
     }
 
