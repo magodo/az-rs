@@ -1,7 +1,7 @@
 use crate::cmd;
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -41,15 +41,23 @@ impl OperationInvocation {
 
         // In case the "--path" is specified, we validate and use it.
         if let Some(path_arg) = self.matches.get_one::<String>(cmd::PATH_OPTION) {
-            path = path_arg.clone();
-            let arg_segs: Vec<_> = path_arg.split('/').collect();
-            let metadata_segs: Vec<_> = path.split('/').collect();
+            let arg_segs: Vec<_> = path_arg
+                .to_uppercase()
+                .split('/')
+                .map(String::from)
+                .collect();
+            let metadata_segs: Vec<_> = path.to_uppercase().split('/').map(String::from).collect();
             if arg_segs.len() != metadata_segs.len() {
                 bail!(r#"invalid value for option "{}""#, cmd::PATH_OPTION);
             }
             for (a, m) in arg_segs.iter().zip(metadata_segs) {
-                if m != "{}" && *a != m {
-                    bail!(r#"invalid value for option "{}""#, cmd::PATH_OPTION);
+                if !m.starts_with("{") && *a != m {
+                    bail!(
+                        r#"invalid value for option "{}": {} != {}"#,
+                        cmd::PATH_OPTION,
+                        *a,
+                        m
+                    );
                 }
             }
         } else {

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
-use crate::api::{metadata_command, metadata_index, ApiManager};
+use crate::api::{ApiManager, metadata_command, metadata_index};
 use crate::arg::CliInput;
 use clap::builder::PossibleValuesParser;
-use clap::{command, Arg, Command};
+use clap::{Arg, Command, command};
 
 pub const PATH_OPTION: &str = "path";
 
@@ -252,14 +252,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         .arg_groups
         .iter()
         .filter(|arg| arg.name != "")
-        .for_each(|ag| {
-            out.extend(
-                ag.args
-                    .iter()
-                    .filter(|arg| !arg.hide.unwrap_or(false)) // Skip the hidden argument, e.g. "id"
-                    .map(|arg| build_arg(arg, false)),
-            )
-        });
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
 
     out
 }
@@ -305,6 +298,11 @@ fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
         }
         out = out.help(msg);
     }
+
+    if let Some(hide) = arg.hide {
+        out = out.hide(hide);
+    }
+
     if is_default_group {
         out = out.conflicts_with(PATH_OPTION);
         if let Some(required) = arg.required {
