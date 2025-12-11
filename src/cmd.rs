@@ -1,17 +1,18 @@
 use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
+use crate::api::metadata_command::Method;
 use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
 use anyhow::{bail, Result};
 use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
-pub const PATH_OPTION: &str = "path";
+pub const ID_OPTION: &str = "id";
 
-pub struct APIPath(String);
+pub struct ResourceId(String);
 
-impl<S> From<S> for APIPath
+impl<S> From<S> for ResourceId
 where
     S: AsRef<str>,
 {
@@ -22,17 +23,20 @@ where
     }
 }
 
-impl APIPath {
-    pub fn validate_pattern(&self, pattern: &str) -> Result<()> {
+impl ResourceId {
+    pub fn validate_pattern(&self, pattern: &str, method: &Method) -> Result<()> {
         let arg_segs: Vec<_> = self.0.to_uppercase().split('/').map(String::from).collect();
-        let pattern_segs: Vec<_> = pattern
+        let mut pattern_segs: Vec<_> = pattern
             .to_uppercase()
             .split('/')
             .map(String::from)
             .collect();
+        if *method == Method::Post {
+            pattern_segs.pop();
+        }
         if arg_segs.len() != pattern_segs.len() {
             bail!(
-                "api path has unexpected length: expect={}, got={}",
+                "id has unexpected length: expect={}, got={}",
                 pattern_segs.len(),
                 arg_segs.len()
             );
@@ -40,7 +44,7 @@ impl APIPath {
         for (arg_seg, pattern_seg) in arg_segs.iter().zip(pattern_segs) {
             if !pattern_seg.starts_with("{") && *arg_seg != pattern_seg {
                 bail!(
-                    r#"api path contains unexpected segment: expect={}, got={}"#,
+                    r#"id contains unexpected segment: expect={}, got={}"#,
                     pattern_seg,
                     *arg_seg,
                 );
@@ -138,12 +142,14 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
                     .as_ref()
                     .and_then(|cg| cg.get(*arg).cloned())
                 {
+                    // This is a command group
                     commands.push(CommandDesc {
                         name: arg.to_string(),
                         help: v.help.clone(),
                     });
                     cg = v;
                 } else if let Some(v) = cg.commands.as_ref().and_then(|c| c.get(*arg).cloned()) {
+                    // This is a command
                     commands.push(CommandDesc {
                         name: arg.to_string(),
                         help: v.help.clone(),
@@ -226,9 +232,7 @@ pub fn cmd_api(api_manager: &ApiManager, input: &CliInput) -> Command {
 fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Vec<Arg> {
     let mut out = vec![];
 
-    // General optional arguments
-
-    // Build the api-version arg
+    // Build the api-version option
     out.push(
         Arg::new("api-version")
             .long("api-version")
@@ -239,54 +243,61 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .value_parser(PossibleValuesParser::new(versions)),
     );
 
-    // Build the file & edit args
-    out.push(
-        Arg::new("file")
-            .long("file")
-            .short('f')
-            .value_name("PATH")
-            .value_parser(clap::value_parser!(std::path::PathBuf))
-            .conflicts_with("edit")
-            .help("Read request payload from the file"),
-    );
-    out.push(
-        Arg::new("edit")
-            .long("edit")
-            .short('e')
-            .action(clap::ArgAction::SetTrue)
-            .conflicts_with("file")
-            .help("Open default editor to compose request payload"),
-    );
-    out.push(
-        Arg::new("print-cli")
-            .long("print-cli")
-            .value_parser(PossibleValuesParser::new(Shell::variants()))
-            .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with "--file" or "--edit""#),
-    );
-
-    // Required options comes
+    // Build the (required) ID options
 
     // The default argument group, which *mostly* (except for List API metadata where the resource group can be optional)
     // contains the required arguments (e.g. name, resource group name, subscription name).
-    let mut default_args = vec![];
-    command
-        .arg_groups
-        .iter()
-        .filter(|ag| ag.name == "") // Indicates the default argument group
-        .for_each(|ag| default_args.extend(ag.args.iter().map(|arg| build_arg(arg, true))));
+    let default_ag = command.arg_groups.iter().find(|ag| ag.name == "");
 
-    // Build the api path arg when there is a default argument group.
-    // The "path" can be specified instead of the required default argument group above.
-    if !default_args.is_empty() {
-        out.push(Arg::new(PATH_OPTION).long(PATH_OPTION).help(format!(
-                "The complete API path. This conflicts with the options {:?}",
-                default_args
-                    .iter()
-                    .filter_map(|arg| arg.get_long())
-                    .collect::<Vec<_>>(),
-            )));
+    // Build the id option when there is a default argument group.
+    // The "id" can be specified instead of the required default argument group above.
+    if let Some(default_ag) = default_ag {
+        let default_args = default_ag
+            .args
+            .iter()
+            .map(|arg| build_arg(arg))
+            .collect::<Vec<_>>();
+        out.extend(default_args);
+
+        let id_args: Vec<_> = default_ag
+            .args
+            .iter()
+            .filter(|arg| arg.id_part.is_some())
+            .map(|arg| arg.options.iter().find(|opt| opt.len() > 1))
+            .filter_map(|name| name)
+            .collect();
+        out.push(Arg::new(ID_OPTION).long(ID_OPTION).help(format!(
+            "The complete resource id. This conflicts with {:?}",
+            id_args
+        )));
     }
-    out.extend(default_args);
+
+    // Build the payload related options
+    if command.contains_request_body() {
+        out.push(
+            Arg::new("file")
+                .long("file")
+                .short('f')
+                .value_name("PATH")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+                .conflicts_with("edit")
+                .help("Read request payload from the file"),
+        );
+        out.push(
+            Arg::new("edit")
+                .long("edit")
+                .short('e')
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with("file")
+                .help("Open default editor to compose request payload"),
+        );
+        out.push(
+            Arg::new("print-cli")
+                .long("print-cli")
+                .value_parser(PossibleValuesParser::new(Shell::variants()))
+                .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with "--file" or "--edit""#),
+        );
+    }
 
     // Build the remaining optional arguments based on the command metadata.
     // NOTE: Only the top level arg groups are exposed.
@@ -294,12 +305,12 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         .arg_groups
         .iter()
         .filter(|arg| arg.name != "")
-        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg, false))));
+        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg))));
 
     out
 }
 
-fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
+fn build_arg(arg: &metadata_command::Arg) -> Arg {
     // The options of one argument can have 0/N short, 0/N long.
     // We reagard the first short(prefered)/long as the name.
     let mut short: Option<char> = None;
@@ -335,8 +346,8 @@ fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
 
     if let Some(help) = &arg.help {
         let mut msg = help.short.clone();
-        if is_default_group {
-            msg += format!(r#" This conflicts with the "{}""#, PATH_OPTION).as_str();
+        if arg.id_part.is_some() {
+            msg += format!(r#" This conflicts with the "{}""#, ID_OPTION).as_str();
         }
         out = out.help(msg);
     }
@@ -345,11 +356,11 @@ fn build_arg(arg: &metadata_command::Arg, is_default_group: bool) -> Arg {
         out = out.hide(hide);
     }
 
-    if is_default_group {
-        out = out.conflicts_with(PATH_OPTION);
+    if arg.id_part.is_some() {
+        out = out.conflicts_with(ID_OPTION);
         if let Some(required) = arg.required {
             if required {
-                out = out.required_unless_present(PATH_OPTION);
+                out = out.required_unless_present(ID_OPTION);
             }
         }
     }

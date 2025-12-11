@@ -1,4 +1,4 @@
-use crate::cmd;
+use crate::{api::metadata_command::Method, cmd};
 
 use super::metadata_command::{Operation, Schema};
 use anyhow::{bail, Result};
@@ -38,11 +38,17 @@ impl OperationInvocation {
 
         let http = self.operation.http.as_ref().unwrap();
         let mut path;
-        // In case the "--path" is specified, we validate and use it.
-        if let Some(path_arg) = self.matches.get_one::<String>(cmd::PATH_OPTION) {
-            let api_path = cmd::APIPath::from(path_arg);
-            api_path.validate_pattern(&http.path)?;
-            path = path_arg.clone();
+        // In case the "--id" is specified, we validate and use it.
+        if let Some(id_arg) = self.matches.get_one::<String>(cmd::ID_OPTION) {
+            let id = cmd::ResourceId::from(id_arg);
+            id.validate_pattern(&http.path, &http.request.method)?;
+
+            path = id_arg.clone();
+            if http.request.method == Method::Post {
+                if let Some(last_seg) = http.path.split("/").last() {
+                    path += format!("/{}", last_seg).as_str();
+                }
+            }
         } else {
             path = http.path.clone();
             for param in &http.request.path.params {
@@ -59,9 +65,22 @@ impl OperationInvocation {
             }
         }
         let mut query_pairs = HashMap::new();
-        // TODO: handle query parameters (query.params)
         for param in &http.request.query.consts {
-            query_pairs.insert(param.name.clone(), param.default.value.clone());
+            // Only handle api-version const query so far.
+            if param.name == "api-version" {
+                if let Some(value) = self.matches.get_one::<String>("api-version") {
+                    query_pairs.insert(param.name.clone(), value.clone());
+                } else {
+                    query_pairs.insert(param.name.clone(), param.default.value.clone());
+                }
+            }
+        }
+        if let Some(params) = http.request.query.params.as_ref() {
+            for param in params {
+                if let Some(value) = self.matches.get_one::<String>(&param.arg) {
+                    query_pairs.insert(param.name.clone(), value.clone());
+                }
+            }
         }
 
         let body = if self.body.is_some() {

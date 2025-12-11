@@ -63,43 +63,47 @@ where
                 .select_operation_by_cond(cmd_cond.as_ref())
                 .ok_or(anyhow!("no operation is selected"))?;
 
-            let mut hcl_body = None;
-            if let Some(p) = matches.get_one::<PathBuf>("file") {
-                // Read the HCL from file
-                hcl_body = Some(get_file(&p)?);
-            } else if matches.get_flag("edit") {
-                // Read the HCL from editor
-                let header = "# ...".to_string();
-                let content = edit(
-                    &header,
-                    metadata_path.to_string_lossy().as_ref(),
-                    &command_file,
-                    cmd_cond.as_ref(),
-                )?;
-                let content = content.trim();
+            let mut body = None;
+            if operation.contains_request_body() {
+                let mut hcl_body = None;
+                if let Some(p) = matches.get_one::<PathBuf>("file") {
+                    // Read the HCL from file
+                    hcl_body = Some(get_file(&p)?);
+                } else if matches.get_flag("edit") {
+                    // Read the HCL from editor
+                    let header = "# ...".to_string();
+                    let content = edit(
+                        &header,
+                        metadata_path.to_string_lossy().as_ref(),
+                        &command_file,
+                        cmd_cond.as_ref(),
+                    )?;
+                    let content = content.trim();
 
-                // If the content is "empty", pause the process and exit.
-                // This behavior is similar to "git commit".
-                if content == header || content.is_empty() {
-                    bail!("Aborting due to empty body");
+                    // If the content is "empty", pause the process and exit.
+                    // This behavior is similar to "git commit".
+                    if content == header || content.is_empty() {
+                        bail!("Aborting due to empty body");
+                    }
+
+                    hcl_body = Some(content.to_string());
                 }
 
-                hcl_body = Some(content.to_string());
-            }
+                body = if let Some(hcl_body) = hcl_body {
+                    let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
+                    let v: serde_json::Value = hcl::from_body(body)?;
+                    Some(v)
+                } else {
+                    None
+                };
 
-            let body = if let Some(hcl_body) = hcl_body {
-                let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
-                let v: serde_json::Value = hcl::from_body(body)?;
-                Some(v)
-            } else {
-                None
-            };
-
-            // Print CLI and quit
-            if let Some(shell) = matches.get_one::<String>("print-cli") {
-                let shell = Shell::from_str(shell.as_str())?;
-                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, &raw_input, body);
-                return expander.expand();
+                // Print CLI and quit
+                if let Some(shell) = matches.get_one::<String>("print-cli") {
+                    let shell = Shell::from_str(shell.as_str())?;
+                    let expander =
+                        CLIExpander::new(&shell, &cmd_metadata.arg_groups, &raw_input, body);
+                    return expander.expand();
+                }
             }
 
             // Invoke the operation

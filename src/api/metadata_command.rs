@@ -118,7 +118,7 @@ pub struct Request {
     pub body: Option<Body>,
 }
 
-#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Method {
     Head,
@@ -174,6 +174,7 @@ pub struct ResponseFormat {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestQuery {
     pub consts: Vec<RequestQueryConst>,
+    pub params: Option<Vec<RequestQueryParam>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -187,6 +188,15 @@ pub struct RequestQueryConst {
     #[serde(rename = "const")]
     pub const_: bool,
     pub default: DefaultValue,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RequestQueryParam {
+    pub arg: String,
+    pub description: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -327,6 +337,13 @@ impl Operation {
         }
         return Some(schema);
     }
+
+    pub fn contains_request_body(&self) -> bool {
+        if let Some(method) = self.http.as_ref().map(|http| http.request.method) {
+            return [Method::Put, Method::Patch, Method::Post].contains(&method);
+        }
+        return false;
+    }
 }
 
 impl Command {
@@ -348,14 +365,17 @@ impl Command {
         if self.conditions.is_none() {
             return None;
         }
-        if let Some(path) = matches.get_one::<String>(cmd::PATH_OPTION) {
-            let api_path = cmd::APIPath::from(path);
+        if let Some(id) = matches.get_one::<String>(cmd::ID_OPTION) {
+            let id = cmd::ResourceId::from(id);
             self.operations
                 .iter()
                 .find(|op| {
                     op.http
                         .as_ref()
-                        .map(|http| api_path.validate_pattern(&http.path).is_ok())
+                        .map(|http| {
+                            id.validate_pattern(&http.path, &http.request.method)
+                                .is_ok()
+                        })
                         .unwrap_or(false)
                 })
                 .and_then(|op| op.when.as_ref())
@@ -401,6 +421,13 @@ impl Command {
                 ),
             },
         }
+    }
+
+    pub fn contains_request_body(&self) -> bool {
+        self.operations
+            .first()
+            .and_then(|op| Some(op.contains_request_body()))
+            .unwrap_or(false)
     }
 }
 
