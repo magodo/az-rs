@@ -289,6 +289,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         let default_args = default_ag
             .args
             .iter()
+            .filter(|arg| !arg.hide.unwrap_or(false))
             .map(|arg| build_arg(arg))
             .collect::<Vec<_>>();
         out.extend(default_args);
@@ -339,7 +340,14 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         .arg_groups
         .iter()
         .filter(|arg| arg.name != "")
-        .for_each(|ag| out.extend(ag.args.iter().map(|arg| build_arg(arg))));
+        .for_each(|ag| {
+            out.extend(
+                ag.args
+                    .iter()
+                    .filter(|arg| !arg.hide.unwrap_or(false))
+                    .map(|arg| build_arg(arg)),
+            )
+        });
 
     out
 }

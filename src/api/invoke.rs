@@ -1,7 +1,7 @@
 use crate::{api::metadata_command::Method, cmd};
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -147,6 +147,18 @@ impl<'a> BodyBuilder<'a> {
     }
 
     fn build_value(&self, schema: &Schema) -> Result<Option<serde_json::Value>> {
+        if schema.read_only.unwrap_or(false) {
+            return Ok(None);
+        }
+
+        // TODO: remove the id from the arg group in the metadata in the future, to avoid this
+        // bizard workaround here.
+        if let Some(arg) = schema.arg.as_ref() {
+            if arg == "$parameters.id" {
+                return Ok(None);
+            }
+        }
+
         match schema.type_.as_str() {
             "object" => {
                 if let Some(arg) = &schema.arg {
