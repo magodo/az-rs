@@ -39,11 +39,15 @@ impl OperationInvocation {
         let http = self.operation.http.as_ref().unwrap();
         let mut path;
         // In case the "--id" is specified, we validate and use it.
-        if let Some(id_arg) = self.matches.get_one::<String>(cmd::ID_OPTION) {
-            let id = cmd::ResourceId::from(id_arg);
+        if let Some(id) = self.matches.get_one::<String>(cmd::ID_OPTION) {
+            let id = if id == "-" {
+                cmd::ResourceId::from_stdin()?
+            } else {
+                cmd::ResourceId::from(id)
+            };
             id.validate_pattern(&http.path, &http.request.method)?;
 
-            path = id_arg.clone();
+            path = id.id();
             if http.request.method == Method::Post {
                 if let Some(last_seg) = http.path.split("/").last() {
                     path += format!("/{}", last_seg).as_str();

@@ -4,12 +4,13 @@ use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
 use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
 pub const ID_OPTION: &str = "id";
 
+#[derive(Debug)]
 pub struct ResourceId(String);
 
 impl<S> From<S> for ResourceId
@@ -24,6 +25,10 @@ where
 }
 
 impl ResourceId {
+    pub fn id(&self) -> String {
+        self.0.clone()
+    }
+
     pub fn validate_pattern(&self, pattern: &str, method: &Method) -> Result<()> {
         let arg_segs: Vec<_> = self.0.to_uppercase().split('/').map(String::from).collect();
         let mut pattern_segs: Vec<_> = pattern
@@ -51,6 +56,35 @@ impl ResourceId {
             }
         }
         return Ok(());
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ResourceId {
+    pub fn from_stdin() -> Result<Self> {
+        use std::io::{self, Read};
+
+        use serde_json::Value;
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        let obj: Value = serde_json::from_str(&buf)?;
+        let obj = obj
+            .as_object()
+            .ok_or(anyhow!("expect a JSON object as input"))?;
+        let id = obj
+            .get("id")
+            .ok_or(anyhow!(r#"there is no "id" key found in the JSON object"#))?;
+        let id = id
+            .as_str()
+            .ok_or(anyhow!(r#"expect the "id" key to be a string"#))?;
+        Ok(Self::from(id))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl ResourceId {
+    pub fn from_stdin() -> Result<Self> {
+        bail!("id can't be read from stdin in WASM32")
     }
 }
 
@@ -267,7 +301,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .filter_map(|name| name)
             .collect();
         out.push(Arg::new(ID_OPTION).long(ID_OPTION).help(format!(
-            "The complete resource id. This conflicts with {:?}",
+            r#"The full resource ID. Use "-" to read a JSON object from stdin and extract its "id" field. This conflicts with {:?}"#,
             id_args
         )));
     }

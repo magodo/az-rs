@@ -61,7 +61,9 @@ where
             let cmd_cond = cmd_metadata.match_condition(&matches);
             let operation = cmd_metadata
                 .select_operation_by_cond(cmd_cond.as_ref())
-                .ok_or(anyhow!("no operation is selected"))?;
+                .ok_or(anyhow!(
+                    "failed to select the operation out from multiple operations available for this command based on the input"
+                ))?;
 
             let mut body = None;
             if operation.contains_request_body() {
