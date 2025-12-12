@@ -5,6 +5,9 @@ use oauth2::ExtraTokenFields;
 use oauth2::{EndpointNotSet};
 use serde::{Deserialize, Serialize};
 
+pub use self::auth_code::AuthorizationCodeFlow;
+pub use self::refresh_token::RefreshTokenFlow;
+
 /// Custom extra token fields implementation.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct CustomTokenFields {

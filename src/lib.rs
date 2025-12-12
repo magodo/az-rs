@@ -1,14 +1,16 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use api::{
+    ApiManager,
     cli_expander::{CLIExpander, Shell},
     invoke::OperationInvocation,
-    ApiManager,
 };
 use arg::CliInput;
 use azure_core::credentials::TokenCredential;
 use clap::{ArgMatches, Command};
 use client::Client;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
+
+use crate::azidentityext::profile::FileSystemProfileManager;
 
 pub mod api;
 pub mod arg;
@@ -23,10 +25,11 @@ pub mod lsp;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_exports;
 
-pub async fn run<F>(metadata_path: PathBuf, raw_input: Vec<String>, cred_func: F) -> Result<String>
-where
-    F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
-{
+pub async fn run(
+    metadata_path: PathBuf,
+    raw_input: Vec<String>,
+    credential: Option<Arc<dyn TokenCredential>>,
+) -> Result<String> {
     tracing::info!("Running CLI with input: {:?}", raw_input);
     let matches = get_matches(cmd::cmd(), raw_input.clone())?;
 
@@ -110,15 +113,69 @@ where
 
             // Invoke the operation
             let invoker = OperationInvocation::new(operation, &matches, &body);
-            let cred = cred_func()?;
             let client = Client::new(
                 "https://management.azure.com",
                 vec!["https://management.azure.com/.default"],
-                cred,
+                credential.expect("Login required to invoke API"),
                 None,
             )?;
             let res = invoker.invoke(&client).await?;
             return Ok(res);
+        }
+        Some(("login", matches)) => {
+            use azidentityext::login::Login;
+            use azidentityext::login::interactive_browser::{
+                InteractiveBrowserLogin, InteractiveBrowserLoginOptions,
+            };
+            use azidentityext::profile::ProfileManager;
+            let options = InteractiveBrowserLoginOptions {
+                tenant_id: matches
+                    .get_one::<String>("tenant-id")
+                    .cloned()
+                    .expect("tenant-id is required"),
+                client_id: "04b07795-8ddb-461a-bbee-02f9e1bf7b46".to_string(),
+                client_secret: None,
+                redirect_port: 47828,
+                scopes: vec![
+                    "https://management.core.windows.net//.default".to_string(),
+                    "offline_access".to_string(),
+                ],
+                prompt: Some("select_account".to_string()),
+                login_hint: Some("user@example.com".to_string()),
+                success_template: "<html><body><h1>Login Successful</h1></body></html>".to_string(),
+                error_template: "<html><body><h1>Login Failed</h1></body></html>".to_string(),
+                server_timeout: std::time::Duration::from_secs(300),
+            };
+            let login = InteractiveBrowserLogin;
+            let http_client = azure_core::http::new_http_client();
+            let session = login
+                .login(http_client.clone(), options)
+                .await
+                .expect("Login failed");
+            let profile_manager = FileSystemProfileManager::new(
+                std::env::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".az-rs")
+                    .join("profile.json"),
+            );
+            profile_manager
+                .login(&azidentityext::profile::AuthSession::RefreshTokenSession(
+                    session,
+                ))
+                .await
+                .expect("Login successful but failed to save profile");
+            Ok("Login successful".to_string())
+        }
+        Some(("logout", _matches)) => {
+            use azidentityext::profile::ProfileManager;
+            let profile_manager = FileSystemProfileManager::new(
+                std::env::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".az-rs")
+                    .join("profile.json"),
+            );
+            profile_manager.logout().await.expect("Logout failed");
+            Ok("Logout successful".to_string())
         }
         _ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
     }

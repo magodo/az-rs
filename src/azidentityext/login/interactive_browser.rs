@@ -2,9 +2,9 @@ use azure_core::http::HttpClient;
 use oauth2::{AuthorizationCode, TokenResponse};
 use std::sync::Arc;
 
+use crate::azidentityext::credential::refreshable_credential::RefreshTokenSession;
 use crate::azidentityext::flow::auth_code::AuthorizationCodeFlow;
-use crate::azidentityext::identity::{AuthSession, Login, Identity};
-use crate::azidentityext::credential::refreshable_credential::RefreshableCredential;
+use crate::azidentityext::login::Login;
 
 mod loopback_server;
 
@@ -45,43 +45,16 @@ impl Login for InteractiveBrowserLogin {
         let code = server.listen_for_code(login_options.server_timeout, auth_code_flow.csrf_state.secret())?;
         let token = auth_code_flow.exchange(http_client, AuthorizationCode::new(code)).await?;
         let refresh_token = token.refresh_token().ok_or_else(|| anyhow::anyhow!("No refresh token received"))?.secret().to_string();
-        Ok(RefreshTokenSession {
+        let access_token = Some(azure_core::credentials::AccessToken {
+            token: token.access_token().secret().clone().into(),
+            expires_on: azure_core::time::OffsetDateTime::now_utc() + token.expires_in().unwrap(),
+        });
+        Ok(RefreshTokenSession::new(
+            login_options.tenant_id,
+            login_options.client_id,
+            login_options.client_secret,
             refresh_token,
-            tenant_id: login_options.tenant_id,
-            client_id: login_options.client_id,
-            client_secret: login_options.client_secret,
-        })
-    }
-}
-
-
-pub struct RefreshTokenSession {
-    refresh_token: String,
-    tenant_id: String,
-    client_id: String,
-    client_secret: Option<String>,
-}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl AuthSession for RefreshTokenSession {
-    async fn logout(&self) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl Identity for RefreshTokenSession {
-    type Credential = RefreshableCredential;
-
-    async fn get_credential(&self, http_client: Arc<dyn HttpClient>) -> anyhow::Result<Self::Credential> {
-        Ok(RefreshableCredential::new(
-            self.tenant_id.clone(),
-            self.client_id.clone(),
-            self.client_secret.clone(),
-            self.refresh_token.clone(),
-            http_client,
+            access_token,
         ))
     }
 }
@@ -89,7 +62,7 @@ impl Identity for RefreshTokenSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log::set_global_logger;
+    use crate::{azidentityext::credential::Session, log::set_global_logger};
     use tokio;
     use azure_core::credentials::TokenCredential;
 
@@ -110,8 +83,8 @@ mod tests {
         };
         let login = InteractiveBrowserLogin;
         let http_client = azure_core::http::new_http_client();
-        let session = login.login(http_client.clone(), options).await.expect("Login failed");
-        let credential = session.get_credential(http_client).await.expect("Get credential failed");
+        let mut session = login.login(http_client.clone(), options).await.expect("Login failed");
+        let credential = session.get_credential(http_client, None).await.expect("Get credential failed");
         let token = credential.get_token(&["https://management.core.windows.net//.default"], None).await.expect("Get token failed");
         assert!(!token.token.secret().is_empty());
     }

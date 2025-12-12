@@ -12,11 +12,8 @@ pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> 
     console_error_panic_hook::set_once();
     set_global_logger();
 
-    let cred_func = || -> anyhow::Result<Arc<dyn TokenCredential>> {
-        let cred = AccessTokenCredential::new(token.to_string())?;
-        Ok(cred)
-    };
-    run(PathBuf::new(), args, cred_func).await.map_err(jsfy)
+    let cred = AccessTokenCredential::new(token.to_string());
+    run(PathBuf::new(), args, Some(Arc::new(cred))).await.map_err(jsfy)
 }
 
 fn jsfy<E>(e: E) -> JsValue

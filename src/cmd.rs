@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
-use crate::api::{metadata_command, metadata_index, ApiManager};
+use crate::api::{ApiManager, metadata_command, metadata_index};
 use crate::arg::CliInput;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::builder::PossibleValuesParser;
-use clap::{command, Arg, Command};
+use clap::{Arg, Command, command};
 
 pub const ID_OPTION: &str = "id";
 
@@ -92,6 +92,8 @@ pub fn cmd() -> Command {
     cmd_base().subcommands([
         Command::new("lsp").about("Start the LSP server."),
         cmd_api_stub(),
+        cmd_login(),
+        cmd_logout(),
     ])
 }
 
@@ -120,6 +122,22 @@ fn cmd_api_base_real() -> Command {
 
 pub fn cmd_api_base() -> Command {
     Command::new("api").about("Directly invoke the Azure API primitives.")
+}
+
+pub fn cmd_login() -> Command {
+    Command::new("login")
+        .about("Login to Azure using interactive browser")
+        .arg(
+            Arg::new("tenant-id")
+                .short('t')
+                .long("tenant-id")
+                .required(true)
+                .help("The tenant ID to log in to"),
+        )
+}
+
+pub fn cmd_logout() -> Command {
+    Command::new("logout").about("Logout from Azure and clear the local profile")
 }
 
 // cmd_api parses the raw CLI args for `api` subcommand, returns a precise clap::Command and
