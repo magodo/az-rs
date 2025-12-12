@@ -26,6 +26,7 @@ path = "examples/client.rs"
 [dependencies]
 anyhow = "1.0.98"
 async-trait = "0.1.89"
+async-lock = "3"
 azure_core = "0.27.0"
 azure_identity = "0.27.0"
 bytes = "1.10.1"
@@ -40,6 +41,8 @@ tempfile = "3.23.0"
 tower-lsp = "0.20.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
+oauth2 = { version = "5.0.0", default-features = false }
+webbrowser = "1.0.5"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

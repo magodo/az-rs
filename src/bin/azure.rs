@@ -1,18 +1,24 @@
 use anyhow::Result;
-use az_rs::log::set_global_logger;
+use az_rs::azidentityext::profile::ProfileManager;
+use az_rs::{azidentityext::profile::FileSystemProfileManager, log::set_global_logger};
 use az_rs::run;
-use azure_core::credentials::TokenCredential;
-use azure_identity::DefaultAzureCredential;
 use std::{env, path::PathBuf, str::FromStr, sync::Arc};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     set_global_logger();
 
-    let cred_func = || -> Result<Arc<dyn TokenCredential>> {
-        let cred = DefaultAzureCredential::new()?;
-        Ok(cred)
-    };
+    let profile_manager = FileSystemProfileManager::new(
+        std::env::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".az-rs")
+            .join("profile.json"),
+    );
+    let http_client = azure_core::http::new_http_client();
+    let credential = profile_manager
+        .get_credential(http_client)
+        .await?
+        .map(Arc::from);
 
     let res = run(
         PathBuf::from_str("./metadata/metadata")?,
@@ -20,7 +26,7 @@ async fn main() -> Result<()> {
             .into_iter()
             .map(|s| s.into_string().unwrap())
             .collect(),
-        cred_func,
+        credential,
     )
     .await?;
     println!("{res}");
