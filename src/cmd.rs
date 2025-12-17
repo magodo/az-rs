@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
-use crate::api::{metadata_command, metadata_index, ApiManager};
+use crate::api::{ApiManager, metadata_command, metadata_index};
 use crate::arg::CliInput;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::builder::PossibleValuesParser;
-use clap::{command, Arg, Command};
+use clap::{Arg, Command, command};
 
 pub const ID_OPTION: &str = "id";
+pub const STDIN_OPTION: &str = "stdin";
 
 #[derive(Debug)]
 pub struct ResourceId(String);
@@ -279,13 +280,9 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
 
     // Build the (required) ID options
 
-    // The default argument group, which *mostly* (except for List API metadata where the resource group can be optional)
-    // contains the required arguments (e.g. name, resource group name, subscription name).
-    let default_ag = command.arg_groups.iter().find(|ag| ag.name == "");
-
-    // Build the id option when there is a default argument group.
-    // The "--id" can be specified instead of the required default argument group above.
-    if let Some(default_ag) = default_ag {
+    if let Some(default_ag) = command.arg_groups.iter().find(|ag| ag.name == "") {
+        // The default argument group, which *mostly* (except for List API metadata where the resource group can be optional)
+        // contains the required arguments (e.g. name, resource group name, subscription name).
         let default_args = default_ag
             .args
             .iter()
@@ -294,7 +291,9 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .collect::<Vec<_>>();
         out.extend(default_args);
 
-        let id_opts: Vec<_> = default_ag
+        // The id option.
+        // The "--id" can be specified instead of the required default argument group above.
+        let id_opt_names: Vec<_> = default_ag
             .args
             .iter()
             .filter(|arg| arg.id_part.is_some())
@@ -303,8 +302,15 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .collect();
         out.push(Arg::new(ID_OPTION).long(ID_OPTION).help(format!(
             r#"The full resource ID. This conflicts with {:?}"#,
-            id_opts
+            id_opt_names
         )));
+
+        // The stdin option.
+        out.push(
+            Arg::new(STDIN_OPTION)
+                .long(STDIN_OPTION)
+                .help(r#"Reading the resource id and request payload from stdin. The content read from the stdin can be one or multiple compact JSON objects."#),
+        );
     }
 
     // Build the payload related options
@@ -406,11 +412,12 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
         out = out.hide(hide);
     }
 
+    // Only ID related options will be required.
     if arg.id_part.is_some() {
         out = out.conflicts_with(ID_OPTION);
         if let Some(required) = arg.required {
             if required {
-                out = out.required_unless_present_any(&[ID_OPTION]);
+                out = out.required_unless_present_any(&[ID_OPTION, STDIN_OPTION]);
             }
         }
     }
