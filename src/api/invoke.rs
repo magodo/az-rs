@@ -40,11 +40,7 @@ impl OperationInvocation {
         let mut path;
         // In case the "--id" is specified, we validate and use it.
         if let Some(id) = self.matches.get_one::<String>(cmd::ID_OPTION) {
-            let id = if id == "-" {
-                cmd::ResourceId::from_stdin()?
-            } else {
-                cmd::ResourceId::from(id)
-            };
+            let id = cmd::ResourceId::from(id);
             id.validate_pattern(&http.path, &http.request.method)?;
 
             path = id.id();

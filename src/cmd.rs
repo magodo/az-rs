@@ -284,7 +284,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
     let default_ag = command.arg_groups.iter().find(|ag| ag.name == "");
 
     // Build the id option when there is a default argument group.
-    // The "id" can be specified instead of the required default argument group above.
+    // The "--id" can be specified instead of the required default argument group above.
     if let Some(default_ag) = default_ag {
         let default_args = default_ag
             .args
@@ -294,7 +294,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .collect::<Vec<_>>();
         out.extend(default_args);
 
-        let id_args: Vec<_> = default_ag
+        let id_opts: Vec<_> = default_ag
             .args
             .iter()
             .filter(|arg| arg.id_part.is_some())
@@ -302,8 +302,8 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .filter_map(|name| name)
             .collect();
         out.push(Arg::new(ID_OPTION).long(ID_OPTION).help(format!(
-            r#"The full resource ID. Use "-" to read a JSON object from stdin and extract its "id" field. This conflicts with {:?}"#,
-            id_args
+            r#"The full resource ID. This conflicts with {:?}"#,
+            id_opts
         )));
     }
 
@@ -387,10 +387,18 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
     }
 
     if let Some(help) = &arg.help {
-        let mut msg = help.short.clone();
-        if arg.id_part.is_some() {
-            msg += format!(r#" This conflicts with the "{}""#, ID_OPTION).as_str();
+        out = out.help(help.short.clone());
+    }
+
+    if arg.id_part.is_some() {
+        let mut msg = out
+            .get_help()
+            .and_then(|help| Some(help.to_string()))
+            .unwrap_or("".to_string());
+        if !msg.is_empty() {
+            msg += " ";
         }
+        msg += format!(r#"This conflicts with "{}""#, ID_OPTION).as_str();
         out = out.help(msg);
     }
 
@@ -402,7 +410,7 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
         out = out.conflicts_with(ID_OPTION);
         if let Some(required) = arg.required {
             if required {
-                out = out.required_unless_present(ID_OPTION);
+                out = out.required_unless_present_any(&[ID_OPTION]);
             }
         }
     }

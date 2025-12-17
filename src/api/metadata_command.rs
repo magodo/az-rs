@@ -366,11 +366,7 @@ impl Command {
             return None;
         }
         if let Some(id) = matches.get_one::<String>(cmd::ID_OPTION) {
-            let id = if id == "-" {
-                cmd::ResourceId::from_stdin().ok()?
-            } else {
-                cmd::ResourceId::from(id)
-            };
+            let id = cmd::ResourceId::from(id);
             self.operations
                 .iter()
                 .find(|op| {
