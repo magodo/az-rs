@@ -1,13 +1,15 @@
 use std::str::FromStr;
 
+use crate::arg::{self, CliInput};
+
 use super::metadata_command::ArgGroup;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::builder::PossibleValue;
 
 pub struct CLIExpander {
     shell: Shell,
     arg_groups: Vec<ArgGroup>,
-    raw_input: Vec<String>,
+    arg_input: CliInput,
     body: Option<serde_json::Value>,
 }
 
@@ -15,42 +17,24 @@ impl CLIExpander {
     pub fn new(
         shell: &Shell,
         arg_groups: &Vec<ArgGroup>,
-        raw_input: &Vec<String>,
+        cli_input: &CliInput,
         body: Option<serde_json::Value>,
     ) -> Self {
         Self {
             shell: shell.clone(),
             arg_groups: arg_groups.clone(),
-            raw_input: raw_input.clone(),
+            arg_input: cli_input.clone(),
             body,
         }
     }
 
-    pub fn expand(&self) -> Result<String> {
+    pub fn expand(&self) -> Result<Vec<String>> {
         let mut cli_inputs = vec![];
-        let mut it = self.raw_input.iter();
-        while let Some(opt) = it.next() {
-            if *opt == "--print-cli" {
-                it.next();
+        for (k, v) in &self.arg_input.opt_args() {
+            if ["print-cli", "stdin", "edit", "e", "file", "f"].contains(k) {
                 continue;
             }
-            if opt.starts_with("--print-cli=") {
-                continue;
-            }
-
-            if *opt == "--edit" || *opt == "-e" {
-                continue;
-            }
-
-            if *opt == "--file" || *opt == "-f" {
-                it.next();
-                continue;
-            }
-            if opt.starts_with("--file=") || opt.starts_with("-f=") {
-                continue;
-            }
-
-            cli_inputs.push(opt.clone());
+            cli_inputs.push(arg::Arg::Optional(k.to_string(), v.map(String::from)));
         }
 
         if let Some(ref body) = self.body {
@@ -60,26 +44,28 @@ impl CLIExpander {
                 .skip_while(|ag| ag.name.is_empty())
                 .for_each(|ag| {
                     ag.args.iter().for_each(|arg| {
-                        if arg.var.starts_with("$parameters.") {
-                            let paths: Vec<_> = arg
-                                .var
-                                .strip_prefix("$parameters.")
-                                .unwrap()
-                                .split('.')
-                                .collect();
-
-                            if let Ok(val) = self.find_value(&paths, body) {
-                                if let Some(option_name) = arg.options.first() {
-                                    let prefix = if option_name.len() == 1 { "-" } else { "--" };
-                                    cli_inputs.push(format!("{prefix}{}", option_name.clone()));
-                                    cli_inputs.push(self.shell.escape(val));
+                        if let Some(prefix) = arg.var.split('.').next() {
+                            if prefix.starts_with("$")
+                                && prefix.to_lowercase().contains("parameters")
+                            {
+                                let paths: Vec<_> = arg.var.split('.').skip(1).collect();
+                                if let Ok(val) = self.find_value(&paths, body) {
+                                    if let Some(option_name) = arg.options.first() {
+                                        cli_inputs.push(arg::Arg::Optional(
+                                            option_name.clone(),
+                                            Some(self.shell.escape(val)),
+                                        ));
+                                    }
                                 }
                             }
                         }
                     });
                 });
         }
-        Ok(cli_inputs.join(" "))
+        Ok(cli_inputs
+            .iter()
+            .map(|arg| format!("{}", arg))
+            .collect::<Vec<_>>())
     }
 
     fn find_value<'a>(

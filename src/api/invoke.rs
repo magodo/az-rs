@@ -1,7 +1,7 @@
 use crate::{api::metadata_command::Method, cmd};
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -129,7 +129,7 @@ impl<'a> BodyBuilder<'a> {
             let mut map = serde_json::Map::new();
             for prop in props {
                 if let Some(prop_name) = &prop.name {
-                    let value = self.build_value(prop)?;
+                    let value = self.build_value(prop).context("build body")?;
                     if let Some(value) = value {
                         map.insert(prop_name.clone(), value);
                     }
@@ -167,7 +167,9 @@ impl<'a> BodyBuilder<'a> {
                     let mut map = serde_json::Map::new();
                     for prop in props {
                         if let Some(prop_name) = &prop.name {
-                            let value = self.build_value(prop)?;
+                            let value = self
+                                .build_value(prop)
+                                .context(format!("build value for {}", prop_name))?;
                             if let Some(value) = value {
                                 map.insert(prop_name.clone(), value);
                             }
@@ -197,9 +199,11 @@ impl<'a> BodyBuilder<'a> {
             }
             _ => {
                 // The other types are all passed in its json form, hence can be directly decoded
+                // TODO: Update the metadata file to eliminate bizzard types like
+                // "ResourceLocation", etc. Just use the primary types.
                 if let Some(arg) = &schema.arg {
                     if let Some(value) = self.0.get_one::<String>(arg) {
-                        Ok(serde_json::from_str(value)?)
+                        Ok(Some(serde_json::Value::String(value.clone())))
                     } else {
                         Ok(None)
                     }

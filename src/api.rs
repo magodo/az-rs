@@ -1,8 +1,19 @@
-use anyhow::Result;
+use anyhow::{anyhow, bail, Context, Result};
+use azure_core::credentials::TokenCredential;
+use clap::ArgMatches;
 use metadata_index::Index;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
-use crate::arg::CliInput;
+use std::str::FromStr;
+
+use crate::{
+    api::{
+        cli_expander::{CLIExpander, Shell},
+        invoke::OperationInvocation,
+    },
+    arg::CliInput,
+    client::Client,
+};
 pub mod cli_expander;
 pub mod invoke;
 pub mod metadata_command;
@@ -10,21 +21,96 @@ pub mod metadata_index;
 
 #[derive(Debug, Clone)]
 pub struct ApiManager {
+    pub root_path: PathBuf,
     pub index: Index,
     #[allow(dead_code)]
     commands_path: PathBuf,
 }
 
 impl ApiManager {
-    pub fn locate_command_file(&self, input: &CliInput) -> Result<String> {
-        self.index.locate_command_file(input)
+    pub async fn run<F>(
+        &self,
+        subcommands: &Vec<String>,
+        args: &CliInput,
+        matches: &ArgMatches,
+        cred_func: F,
+    ) -> Result<String>
+    where
+        F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+    {
+        // Locate the operation
+        let command_file = self.index.locate_command_file(args)?;
+        let cmd_metadata = self.read_command(&command_file)?;
+        let cmd_cond = cmd_metadata.match_condition(&matches);
+        let operation = cmd_metadata
+                .select_operation_by_cond(cmd_cond.as_ref())
+                .ok_or(anyhow!(
+                    "failed to select the operation out from multiple operations available for this command based on the input"
+                ))?;
+
+        let mut body = None;
+        if operation.contains_request_body() {
+            let mut hcl_body = None;
+            if let Some(p) = matches.get_one::<PathBuf>("file") {
+                // Read the HCL from file
+                hcl_body = Some(get_file(&p)?);
+            } else if matches.get_flag("edit") {
+                // Read the HCL from editor
+                let header = "# ...".to_string();
+                let content = edit(
+                    &header,
+                    self.root_path.to_string_lossy().as_ref(),
+                    &command_file,
+                    cmd_cond.as_ref(),
+                )?;
+                let content = content.trim();
+
+                // If the content is "empty", pause the process and exit.
+                // This behavior is similar to "git commit".
+                if content == header || content.is_empty() {
+                    bail!("Aborting due to empty body");
+                }
+
+                hcl_body = Some(content.to_string());
+            }
+
+            body = if let Some(hcl_body) = hcl_body {
+                let body = hcl::parse(&hcl_body).context("parsing the file as HCL")?;
+                let v: serde_json::Value = hcl::from_body(body)?;
+                Some(v)
+            } else {
+                None
+            };
+
+            // Print CLI and quit
+            if let Some(shell) = matches.get_one::<String>("print-cli") {
+                let shell = Shell::from_str(shell.as_str())?;
+                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, args, body);
+                let args = expander.expand()?;
+                let mut cli = vec![];
+                cli.extend(subcommands.iter().cloned());
+                cli.extend(args);
+                return Ok(cli.join(" "));
+            }
+        }
+
+        // Invoke the operation
+        let invoker = OperationInvocation::new(operation, &matches, &body);
+        let cred = cred_func()?;
+        let client = Client::new(
+            "https://management.azure.com",
+            vec!["https://management.azure.com/.default"],
+            cred,
+            None,
+        )?;
+        invoker.invoke(&client).await
     }
 }
 
 #[cfg(any(feature = "embed-api", target_arch = "wasm32"))]
 mod embedded {
     use super::metadata_command::Command;
-    use anyhow::{Result, anyhow};
+    use anyhow::{anyhow, Result};
     use std::path::PathBuf;
 
     use rust_embed::RustEmbed;
@@ -41,6 +127,7 @@ mod embedded {
             let index = serde_json::from_slice(&bytes)?;
 
             Ok(Self {
+                root_path: PathBuf::new(),
                 index,
                 commands_path: PathBuf::new(),
             })
@@ -70,6 +157,7 @@ mod fs {
             let bytes = read(index_path).context(format!("reading the index file"))?;
             let index = serde_json::from_slice(&bytes)?;
             Ok(Self {
+                root_path: path.clone(),
                 index,
                 commands_path,
             })
@@ -81,4 +169,41 @@ mod fs {
             Ok(serde_json::from_slice(&bytes)?)
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn get_file(_: &PathBuf) -> Result<String> {
+    Err(anyhow!(r#""--file" is not supported on wasm32"#))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn get_file(p: &PathBuf) -> Result<String> {
+    std::fs::read_to_string(p).context(format!("reading file from {p:?}"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn edit(_: &String, _: &str, _: &str, _: Option<&String>) -> Result<String> {
+    Err(anyhow!(r#""--edit" is not supported on wasm32"#))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn edit(
+    content: &String,
+    metadata_path: &str,
+    cmd_file: &str,
+    cmd_cond: Option<&String>,
+) -> Result<String> {
+    use crate::lsp;
+
+    let mut envs = std::collections::HashMap::from([
+        (lsp::LSP_METADATA_PATH, metadata_path),
+        (lsp::LSP_CMD_FILE, cmd_file),
+    ]);
+    if let Some(cmd_cond) = cmd_cond {
+        envs.insert(lsp::LSP_CMD_CONDITION, cmd_cond);
+    }
+    Ok(
+        edit::edit_with_builder_with_env(content, tempfile::Builder::new().suffix(".az"), envs)?
+            .to_string(),
+    )
 }

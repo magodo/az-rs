@@ -1,9 +1,32 @@
+use std::fmt::Display;
+
 use anyhow::Result;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Arg {
     Optional(String, Option<String>), // Can be: --enable, --enable=true, --foo bar
     Positional(String),
+}
+
+impl Display for Arg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Arg::Optional(k, v) => {
+                f.write_str("-")?;
+                if k.len() != 1 {
+                    f.write_str("-")?;
+                }
+                f.write_str(k)?;
+                if let Some(v) = v {
+                    write!(f, "={}", v)?;
+                }
+            }
+            Arg::Positional(v) => {
+                f.write_str(v)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +114,19 @@ impl CliInput {
             .filter_map(|arg| {
                 if let Arg::Positional(arg) = arg {
                     Some(arg.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn opt_args(&self) -> Vec<(&str, Option<&str>)> {
+        self.args
+            .iter()
+            .filter_map(|arg| {
+                if let Arg::Optional(k, v) = arg {
+                    Some((k.as_str(), v.as_ref().map(|v| v.as_str())))
                 } else {
                     None
                 }

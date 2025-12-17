@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
-use crate::api::{ApiManager, metadata_command, metadata_index};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
-use anyhow::{Result, anyhow, bail};
+use anyhow::{anyhow, bail, Result};
 use clap::builder::PossibleValuesParser;
-use clap::{Arg, Command, command};
+use clap::{command, Arg, Command};
 
 pub const ID_OPTION: &str = "id";
 pub const STDIN_OPTION: &str = "stdin";
