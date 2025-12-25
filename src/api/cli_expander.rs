@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::arg::{self, CliInput};
+use crate::{
+    arg::{self, CliInput},
+    cmd::ID_OPTION,
+};
 
 use super::metadata_command::ArgGroup;
 use anyhow::{anyhow, bail, Context, Result};
@@ -11,6 +14,7 @@ pub struct CLIExpander {
     arg_groups: Vec<ArgGroup>,
     arg_input: CliInput,
     body: Option<serde_json::Value>,
+    id: Option<String>,
 }
 
 impl CLIExpander {
@@ -19,12 +23,14 @@ impl CLIExpander {
         arg_groups: &Vec<ArgGroup>,
         cli_input: &CliInput,
         body: Option<serde_json::Value>,
+        id: Option<String>,
     ) -> Self {
         Self {
             shell: shell.clone(),
             arg_groups: arg_groups.clone(),
             arg_input: cli_input.clone(),
             body,
+            id,
         }
     }
 
@@ -35,6 +41,9 @@ impl CLIExpander {
                 continue;
             }
             cli_inputs.push(arg::Arg::Optional(k.to_string(), v.map(String::from)));
+        }
+        if let Some(ref id) = self.id {
+            cli_inputs.push(arg::Arg::Optional(ID_OPTION.to_string(), Some(id.clone())));
         }
 
         if let Some(ref body) = self.body {

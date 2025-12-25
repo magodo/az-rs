@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
-use crate::api::{metadata_command, metadata_index, ApiManager};
+use crate::api::{ApiManager, metadata_command, metadata_index};
 use crate::arg::CliInput;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::builder::PossibleValuesParser;
-use clap::{command, Arg, Command};
+use clap::{Arg, Command, command};
 
 pub const ID_OPTION: &str = "id";
 pub const STDIN_OPTION: &str = "stdin";
@@ -292,24 +292,29 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
         out.extend(default_args);
 
         // The id option.
-        // The "--id" can be specified instead of the required default argument group above.
+        // One of "id", "stdin" and id related args are required.
         let id_opt_names: Vec<_> = default_ag
             .args
             .iter()
             .filter(|arg| arg.id_part.is_some())
             .map(|arg| arg.options.iter().find(|opt| opt.len() > 1))
-            .filter_map(|name| name)
+            .filter_map(|name| name.cloned())
             .collect();
+
+        let conflicts = [&id_opt_names[..], &[STDIN_OPTION.to_string()]].concat();
         out.push(Arg::new(ID_OPTION).long(ID_OPTION).help(format!(
-            r#"The full resource ID. This conflicts with {:?}"#,
-            id_opt_names
+            r#"The full resource ID. This conflicts with {conflicts:?}"#
         )));
 
         // The stdin option.
+        // One of "id", "stdin" and id related args are required.
+        let conflicts = [&id_opt_names[..], &["id".to_string()]].concat();
         out.push(
             Arg::new(STDIN_OPTION)
                 .long(STDIN_OPTION)
-                .help(r#"Reading the resource id and request payload from stdin. The content read from the stdin can be one or multiple compact JSON objects."#),
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with(ID_OPTION)
+                .help(format!(r#"Reading the resource id and request payload from stdin. The content read from the stdin can be one or multiple compact JSON objects. This conflicts with {conflicts:?}"#))
         );
     }
 
@@ -321,7 +326,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
                 .short('f')
                 .value_name("PATH")
                 .value_parser(clap::value_parser!(std::path::PathBuf))
-                .conflicts_with("edit")
+                .conflicts_with_all(["edit", STDIN_OPTION])
                 .help("Read request payload from the file"),
         );
         out.push(
@@ -329,16 +334,18 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
                 .long("edit")
                 .short('e')
                 .action(clap::ArgAction::SetTrue)
-                .conflicts_with("file")
+                .conflicts_with_all(["file", STDIN_OPTION])
                 .help("Open default editor to compose request payload"),
         );
-        out.push(
+    }
+
+    // Build behavior related options
+    out.push(
             Arg::new("print-cli")
                 .long("print-cli")
                 .value_parser(PossibleValuesParser::new(Shell::variants()))
                 .help(r#"Print the equivalent CLI command instead of executing it, useful when combined with "--file" or "--edit""#),
         );
-    }
 
     // Build the remaining optional arguments based on the command metadata.
     // NOTE: Only the top level arg groups are exposed.
@@ -396,6 +403,11 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
         out = out.help(help.short.clone());
     }
 
+    if let Some(hide) = arg.hide {
+        out = out.hide(hide);
+    }
+
+    let conflicts = [ID_OPTION, STDIN_OPTION];
     if arg.id_part.is_some() {
         let mut msg = out
             .get_help()
@@ -404,20 +416,16 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
         if !msg.is_empty() {
             msg += " ";
         }
-        msg += format!(r#"This conflicts with "{}""#, ID_OPTION).as_str();
+        msg += format!(r#"This conflicts with {conflicts:?}"#,).as_str();
         out = out.help(msg);
-    }
-
-    if let Some(hide) = arg.hide {
-        out = out.hide(hide);
     }
 
     // Only ID related options will be required.
     if arg.id_part.is_some() {
-        out = out.conflicts_with(ID_OPTION);
+        out = out.conflicts_with_all(conflicts);
         if let Some(required) = arg.required {
             if required {
-                out = out.required_unless_present_any(&[ID_OPTION, STDIN_OPTION]);
+                out = out.required_unless_present_any(conflicts);
             }
         }
     }

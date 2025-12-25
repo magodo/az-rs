@@ -2,10 +2,14 @@ use anyhow::{anyhow, bail, Context, Result};
 use azure_core::credentials::TokenCredential;
 use clap::ArgMatches;
 use metadata_index::Index;
+use std::collections::HashMap;
+use std::io::{self, BufRead};
 use std::{path::PathBuf, sync::Arc};
 
 use std::str::FromStr;
 
+use crate::api::metadata_command::ConditionOpt;
+use crate::cmd::{self, STDIN_OPTION};
 use crate::{
     api::{
         cli_expander::{CLIExpander, Shell},
@@ -38,10 +42,111 @@ impl ApiManager {
     where
         F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
     {
-        // Locate the operation
+        let cred = cred_func()?;
+
+        // Print CLI and quit
+        let print_cli = matches.get_one::<String>("print-cli").map(|v| v);
+
+        // Locate the command metadata
         let command_file = self.index.locate_command_file(args)?;
         let cmd_metadata = self.read_command(&command_file)?;
-        let cmd_cond = cmd_metadata.match_condition(&matches);
+
+        if matches.get_flag(STDIN_OPTION) {
+            // Read the id and body from stdin, where each line shall be a JSON object containing
+            // the '.id' and other body attributes.
+            let handle = io::stdin().lock();
+            let mut results = vec![];
+            for line_result in handle.lines() {
+                let line = line_result?;
+                let mut obj: serde_json::Map<String, serde_json::Value> =
+                    serde_json::from_str(&line)?;
+                let id = obj
+                    .get("id")
+                    .ok_or(anyhow!(r#""id" field not found"#))?
+                    .as_str()
+                    .ok_or(anyhow!(r#""id" field is not a str"#))?
+                    .to_string();
+
+                // Locate the operation
+                let condition_opt = ConditionOpt::new(Some(id.clone()), None);
+                let cmd_cond = cmd_metadata.build_condition(condition_opt);
+                let operation = cmd_metadata
+                .select_operation_by_cond(cmd_cond.as_ref())
+                .ok_or(anyhow!(
+                    "failed to select the operation out from multiple operations available for this command based on the input"
+                ))?;
+
+                let mut body = None;
+                if operation.contains_request_body() {
+                    obj.remove("id").unwrap();
+                    let mut obj = serde_json::Value::Object(obj);
+                    if let Some(schema) = operation
+                        .http
+                        .as_ref()
+                        .and_then(|http| http.request.body.as_ref())
+                        .and_then(|b| b.json.schema.as_ref())
+                    {
+                        schema.shake_body(&mut obj)?;
+                    }
+                    body = Some(obj);
+                }
+
+                if let Some(shell) = print_cli {
+                    let shell = Shell::from_str(shell.as_str())?;
+                    let expander = CLIExpander::new(
+                        &shell,
+                        &cmd_metadata.arg_groups,
+                        args,
+                        body,
+                        Some(id.clone()),
+                    );
+                    let args = expander.expand()?;
+                    let mut cli = vec![];
+                    cli.extend(subcommands.iter().cloned());
+                    cli.extend(args);
+                    let result = cli.join(" ");
+                    results.push(result);
+                    continue;
+                }
+
+                // Invoke the operation
+                let invoker = OperationInvocation::new(operation, &matches, &body);
+                let client = Client::new(
+                    "https://management.azure.com",
+                    vec!["https://management.azure.com/.default"],
+                    cred.clone(),
+                    None,
+                )?;
+                let result = invoker.invoke(&client).await?;
+                results.push(result);
+            }
+            return Ok(results.join("\n"));
+        }
+
+        // Locate the operation (for metadata that contains multiple operations by conditions)
+        let name_args = cmd_metadata
+            .arg_groups
+            .iter()
+            .find(|ag| ag.name == "")
+            .and_then(|ag| {
+                Some(
+                    ag.args
+                        .iter()
+                        .filter(|arg| !arg.hide.unwrap_or(false))
+                        .filter(|arg| arg.id_part.is_some())
+                        .map(|arg| {
+                            (
+                                arg.var.clone(),
+                                matches.get_one::<String>(&arg.var).cloned(),
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                )
+            });
+        let id_arg = matches.get_one::<String>(cmd::ID_OPTION).cloned();
+        let condition_opt = ConditionOpt::new(id_arg, name_args);
+
+        let cmd_cond = cmd_metadata.build_condition(condition_opt);
         let operation = cmd_metadata
                 .select_operation_by_cond(cmd_cond.as_ref())
                 .ok_or(anyhow!(
@@ -83,9 +188,9 @@ impl ApiManager {
             };
 
             // Print CLI and quit
-            if let Some(shell) = matches.get_one::<String>("print-cli") {
+            if let Some(shell) = print_cli {
                 let shell = Shell::from_str(shell.as_str())?;
-                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, args, body);
+                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, args, body, None);
                 let args = expander.expand()?;
                 let mut cli = vec![];
                 cli.extend(subcommands.iter().cloned());
@@ -96,7 +201,6 @@ impl ApiManager {
 
         // Invoke the operation
         let invoker = OperationInvocation::new(operation, &matches, &body);
-        let cred = cred_func()?;
         let client = Client::new(
             "https://management.azure.com",
             vec!["https://management.azure.com/.default"],
