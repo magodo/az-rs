@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
-use crate::api::{ApiManager, metadata_command, metadata_index};
+use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
-use anyhow::{Result, anyhow, bail};
+use anyhow::{anyhow, bail, Result};
 use clap::builder::PossibleValuesParser;
-use clap::{Arg, Command, command};
+use clap::{command, Arg, Command};
 
 pub const ID_OPTION: &str = "id";
 pub const STDIN_OPTION: &str = "stdin";
@@ -314,7 +314,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
                 .long(STDIN_OPTION)
                 .action(clap::ArgAction::SetTrue)
                 .conflicts_with(ID_OPTION)
-                .help(format!(r#"Reading the resource id and request payload from stdin. The content read from the stdin can be one or multiple compact JSON objects. This conflicts with {conflicts:?}"#))
+                .help(format!(r#"Reading the resource id and request payload (only for "create" commands) from stdin as one or multiple compact JSON objects. This conflicts with {conflicts:?}"#))
         );
     }
 
@@ -409,6 +409,7 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
 
     let conflicts = [ID_OPTION, STDIN_OPTION];
     if arg.id_part.is_some() {
+        // Update help message
         let mut msg = out
             .get_help()
             .and_then(|help| Some(help.to_string()))
@@ -418,10 +419,8 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
         }
         msg += format!(r#"This conflicts with {conflicts:?}"#,).as_str();
         out = out.help(msg);
-    }
 
-    // Only ID related options will be required.
-    if arg.id_part.is_some() {
+        // Update conflicts/requireness
         out = out.conflicts_with_all(conflicts);
         if let Some(required) = arg.required {
             if required {

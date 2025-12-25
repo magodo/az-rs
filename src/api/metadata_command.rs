@@ -399,6 +399,13 @@ impl Operation {
         }
         return false;
     }
+
+    pub fn is_put(&self) -> bool {
+        if let Some(method) = self.http.as_ref().map(|http| http.request.method) {
+            return method == Method::Put;
+        }
+        return false;
+    }
 }
 
 #[derive(Debug)]

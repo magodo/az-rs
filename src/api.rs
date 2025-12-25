@@ -52,7 +52,7 @@ impl ApiManager {
         let cmd_metadata = self.read_command(&command_file)?;
 
         if matches.get_flag(STDIN_OPTION) {
-            // Read the id and body from stdin, where each line shall be a JSON object containing
+            // Read the id and (optionally, only for PUT) body from stdin, where each line shall be a JSON object containing
             // the '.id' and other body attributes.
             let handle = io::stdin().lock();
             let mut results = vec![];
@@ -77,7 +77,7 @@ impl ApiManager {
                 ))?;
 
                 let mut body = None;
-                if operation.contains_request_body() {
+                if operation.is_put() {
                     obj.remove("id").unwrap();
                     let mut obj = serde_json::Value::Object(obj);
                     if let Some(schema) = operation
