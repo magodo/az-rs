@@ -83,7 +83,9 @@ impl ApiManager {
                     if let Some(schema) = operation
                         .http
                         .as_ref()
-                        .and_then(|http| http.request.body.as_ref())
+                        // The first response is the successful response
+                        .and_then(|http| http.responses.first())
+                        .and_then(|resp| resp.body.as_ref())
                         .and_then(|b| b.json.schema.as_ref())
                     {
                         schema.shake_body(&mut obj)?;
