@@ -287,7 +287,7 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
             .args
             .iter()
             .filter(|arg| !arg.hide.unwrap_or(false))
-            .map(|arg| build_arg(arg))
+            .map(|arg| build_id_arg(arg))
             .collect::<Vec<_>>();
         out.extend(default_args);
 
@@ -319,14 +319,19 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
     }
 
     // Build the payload related options
+    let is_put = command.operations.iter().any(|op| op.is_put());
     if command.contains_request_body() {
+        let mut file_conflicts = vec!["edit"];
+        if is_put {
+            file_conflicts.push(STDIN_OPTION);
+        }
         out.push(
             Arg::new("file")
                 .long("file")
                 .short('f')
                 .value_name("PATH")
                 .value_parser(clap::value_parser!(std::path::PathBuf))
-                .conflicts_with_all(["edit", STDIN_OPTION])
+                .conflicts_with_all(file_conflicts)
                 .help("Read request payload from the file"),
         );
         out.push(
@@ -358,10 +363,51 @@ fn build_args(versions: &Vec<String>, command: &metadata_command::Command) -> Ve
                 ag.args
                     .iter()
                     .filter(|arg| !arg.hide.unwrap_or(false))
-                    .map(|arg| build_arg(arg)),
+                    .map(|arg| build_body_arg(arg, is_put)),
             )
         });
 
+    out
+}
+
+fn build_id_arg(arg: &metadata_command::Arg) -> Arg {
+    let mut out = build_arg(arg);
+
+    // Id related args conflicts with --id and --stdin
+    let other_id_args = [ID_OPTION, STDIN_OPTION];
+
+    // Update help message
+    let mut msg = out
+        .get_help()
+        .and_then(|help| Some(help.to_string()))
+        .unwrap_or("".to_string());
+    if !msg.is_empty() {
+        msg += " ";
+    }
+    msg += format!(r#"This conflicts with {other_id_args:?}"#,).as_str();
+    out = out.help(msg);
+
+    // Update conflicts
+    out = out.conflicts_with_all(other_id_args);
+
+    // Id related args are required
+    if let Some(required) = arg.required {
+        if required {
+            out = out.required_unless_present_any(other_id_args);
+        }
+    }
+
+    out
+}
+
+fn build_body_arg(arg: &metadata_command::Arg, is_put: bool) -> Arg {
+    let mut out = build_arg(arg);
+
+    if is_put {
+        // PUT operation with --stdin specified will read the body from stdin.
+        // Hence all body arguments conflicts with --stdin.
+        out = out.conflicts_with(STDIN_OPTION);
+    }
     out
 }
 
@@ -405,28 +451,6 @@ fn build_arg(arg: &metadata_command::Arg) -> Arg {
 
     if let Some(hide) = arg.hide {
         out = out.hide(hide);
-    }
-
-    let conflicts = [ID_OPTION, STDIN_OPTION];
-    if arg.id_part.is_some() {
-        // Update help message
-        let mut msg = out
-            .get_help()
-            .and_then(|help| Some(help.to_string()))
-            .unwrap_or("".to_string());
-        if !msg.is_empty() {
-            msg += " ";
-        }
-        msg += format!(r#"This conflicts with {conflicts:?}"#,).as_str();
-        out = out.help(msg);
-
-        // Update conflicts/requireness
-        out = out.conflicts_with_all(conflicts);
-        if let Some(required) = arg.required {
-            if required {
-                out = out.required_unless_present_any(conflicts);
-            }
-        }
     }
 
     out
