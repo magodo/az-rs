@@ -1,7 +1,7 @@
 use crate::{api::metadata_command::Method, cmd};
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct OperationInvocation {
     operation: Operation,
     matches: ArgMatches,
+    id: Option<String>,
     body: Option<serde_json::Value>,
 }
 
@@ -16,11 +17,13 @@ impl OperationInvocation {
     pub fn new(
         operation: &Operation,
         matches: &ArgMatches,
+        id: &Option<String>,
         body: &Option<serde_json::Value>,
     ) -> Self {
         Self {
             operation: operation.clone(),
             matches: matches.clone(),
+            id: id.clone(),
             body: body.clone(),
         }
     }
@@ -38,8 +41,8 @@ impl OperationInvocation {
 
         let http = self.operation.http.as_ref().unwrap();
         let mut path;
-        // In case the "--id" is specified, we validate and use it.
-        if let Some(id) = self.matches.get_one::<String>(cmd::ID_OPTION) {
+        // In case the "id" is specified, we validate and use it.
+        if let Some(id) = self.id.as_ref() {
             let id = cmd::ResourceId::from(id);
             id.validate_pattern(&http.path, &http.request.method)?;
 

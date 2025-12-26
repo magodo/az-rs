@@ -110,7 +110,7 @@ impl ApiManager {
                 }
 
                 // Invoke the operation
-                let invoker = OperationInvocation::new(operation, &matches, &body);
+                let invoker = OperationInvocation::new(operation, &matches, &Some(id), &body);
                 let client = Client::new(
                     "https://management.azure.com",
                     vec!["https://management.azure.com/.default"],
@@ -200,7 +200,12 @@ impl ApiManager {
         }
 
         // Invoke the operation
-        let invoker = OperationInvocation::new(operation, &matches, &body);
+        let invoker = OperationInvocation::new(
+            operation,
+            &matches,
+            &matches.get_one::<String>(cmd::ID_OPTION).cloned(),
+            &body,
+        );
         let client = Client::new(
             "https://management.azure.com",
             vec!["https://management.azure.com/.default"],
