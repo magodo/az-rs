@@ -44,9 +44,6 @@ impl ApiManager {
     {
         let cred = cred_func()?;
 
-        // Print CLI and quit
-        let print_cli = matches.get_one::<String>("print-cli").map(|v| v);
-
         // Locate the command metadata
         let command_file = self.index.locate_command_file(args)?;
         let cmd_metadata = self.read_command(&command_file)?;
@@ -93,7 +90,8 @@ impl ApiManager {
                     body = Some(obj);
                 }
 
-                if let Some(shell) = print_cli {
+                // Print CLI and quit
+                if let Some(shell) = matches.get_one::<String>("print-cli").map(|v| v) {
                     let shell = Shell::from_str(shell.as_str())?;
                     let expander = CLIExpander::new(
                         &shell,
@@ -188,17 +186,17 @@ impl ApiManager {
             } else {
                 None
             };
+        }
 
-            // Print CLI and quit
-            if let Some(shell) = print_cli {
-                let shell = Shell::from_str(shell.as_str())?;
-                let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, args, body, None);
-                let args = expander.expand()?;
-                let mut cli = vec![];
-                cli.extend(subcommands.iter().cloned());
-                cli.extend(args);
-                return Ok(cli.join(" "));
-            }
+        // Print CLI and quit
+        if let Some(shell) = matches.get_one::<String>("print-cli").map(|v| v) {
+            let shell = Shell::from_str(shell.as_str())?;
+            let expander = CLIExpander::new(&shell, &cmd_metadata.arg_groups, args, body, None);
+            let args = expander.expand()?;
+            let mut cli = vec![];
+            cli.extend(subcommands.iter().cloned());
+            cli.extend(args);
+            return Ok(cli.join(" "));
         }
 
         // Invoke the operation

@@ -45,7 +45,6 @@ impl OperationInvocation {
         if let Some(id) = self.id.as_ref() {
             let id = cmd::ResourceId::from(id);
             id.validate_pattern(&http.path, &http.request.method)?;
-
             path = id.id();
             if http.request.method == Method::Post {
                 if let Some(last_seg) = http.path.split("/").last() {

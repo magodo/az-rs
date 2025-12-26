@@ -4,7 +4,7 @@ use crate::api::cli_expander::Shell;
 use crate::api::metadata_command::Method;
 use crate::api::{metadata_command, metadata_index, ApiManager};
 use crate::arg::CliInput;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use clap::builder::PossibleValuesParser;
 use clap::{command, Arg, Command};
 
@@ -57,35 +57,6 @@ impl ResourceId {
             }
         }
         return Ok(());
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl ResourceId {
-    pub fn from_stdin() -> Result<Self> {
-        use std::io::{self, Read};
-
-        use serde_json::Value;
-        let mut buf = String::new();
-        io::stdin().read_to_string(&mut buf)?;
-        let obj: Value = serde_json::from_str(&buf)?;
-        let obj = obj
-            .as_object()
-            .ok_or(anyhow!("expect a JSON object as input"))?;
-        let id = obj
-            .get("id")
-            .ok_or(anyhow!(r#"there is no "id" key found in the JSON object"#))?;
-        let id = id
-            .as_str()
-            .ok_or(anyhow!(r#"expect the "id" key to be a string"#))?;
-        Ok(Self::from(id))
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl ResourceId {
-    pub fn from_stdin() -> Result<Self> {
-        bail!("id can't be read from stdin in WASM32")
     }
 }
 
