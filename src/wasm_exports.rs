@@ -16,7 +16,15 @@ pub async fn run_cli(args: Vec<String>, token: &str) -> Result<String, JsValue> 
         let cred = AccessTokenCredential::new(token.to_string())?;
         Ok(cred)
     };
-    run(PathBuf::new(), args, cred_func).await.map_err(jsfy)
+
+    let mut resp = Default::default();
+    let resp_func = |res: String| {
+        resp = res;
+    };
+    run(PathBuf::new(), args, cred_func, resp_func)
+        .await
+        .map_err(jsfy)?;
+    Ok(resp)
 }
 
 fn jsfy<E>(e: E) -> JsValue

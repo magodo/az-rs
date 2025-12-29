@@ -1,4 +1,6 @@
-use clap::ArgMatches;
+use std::collections::HashMap;
+
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::CompletionItemKind;
 
@@ -266,6 +268,59 @@ pub struct AdditionalPropItemSchema {
 }
 
 impl Schema {
+    // shake_body removes all the readOnly attributes from the body.
+    pub fn shake_body(&self, body: &mut serde_json::Value) -> Result<()> {
+        self.shake_value(body)
+    }
+
+    fn shake_value(&self, body: &mut serde_json::Value) -> Result<()> {
+        match body {
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::String(_) => {
+                return Ok(());
+            }
+            serde_json::Value::Array(values) => {
+                if let Some(item) = &self.item {
+                    if item.read_only.unwrap_or(false) {
+                        *values = vec![];
+                    }
+                    for value in values {
+                        self.shake_value(value)?;
+                    }
+                }
+                return Ok(());
+            }
+            serde_json::Value::Object(map) => {
+                if let Some(props) = &self.props {
+                    let mut keys_to_remove = vec![];
+                    for (k, v) in map.iter_mut() {
+                        if let Some(schema) = props.iter().find(|schema| {
+                            schema.name.as_ref().unwrap_or(&"".to_string()) == k.as_str()
+                        }) {
+                            // Schema found for the current kv, either continue to shake it or remove
+                            // it if read only.
+                            if schema.read_only.unwrap_or(false) {
+                                keys_to_remove.push(k.clone());
+                            } else {
+                                schema.shake_value(v)?;
+                            }
+                        } else {
+                            // Schema not found, which is likely user explicitly specified or some
+                            // new fields not defined in this version of schema.
+                            // Just keep it by doing nothing.
+                        }
+                    }
+                    keys_to_remove.iter().for_each(|k| {
+                        map.remove(k);
+                    });
+                }
+                return Ok(());
+            }
+        }
+    }
+
     pub fn to_hover_content(&self) -> String {
         let mut content = format!(
             "{} *{}*, {}",
@@ -344,6 +399,31 @@ impl Operation {
         }
         return false;
     }
+
+    pub fn is_put(&self) -> bool {
+        if let Some(method) = self.http.as_ref().map(|http| http.request.method) {
+            return method == Method::Put;
+        }
+        return false;
+    }
+}
+
+#[derive(Debug)]
+pub enum ConditionOpt {
+    ID(String),
+    Names(HashMap<String, Option<String>>),
+}
+
+impl ConditionOpt {
+    pub fn new(id_arg: Option<String>, name_args: Option<HashMap<String, Option<String>>>) -> Self {
+        if let Some(id_arg) = id_arg {
+            return Self::ID(id_arg);
+        }
+        if let Some(names) = name_args {
+            return Self::Names(names);
+        }
+        unreachable!("neither id_arg nor name_args are specified");
+    }
 }
 
 impl Command {
@@ -361,55 +441,57 @@ impl Command {
         }
     }
 
-    pub fn match_condition(&self, matches: &ArgMatches) -> Option<String> {
+    pub fn build_condition(&self, opt: ConditionOpt) -> Option<String> {
         if self.conditions.is_none() {
             return None;
         }
-        if let Some(id) = matches.get_one::<String>(cmd::ID_OPTION) {
-            let id = if id == "-" {
-                cmd::ResourceId::from_stdin().ok()?
-            } else {
-                cmd::ResourceId::from(id)
-            };
-            self.operations
-                .iter()
-                .find(|op| {
-                    op.http
-                        .as_ref()
-                        .map(|http| {
-                            id.validate_pattern(&http.path, &http.request.method)
-                                .is_ok()
-                        })
-                        .unwrap_or(false)
-                })
-                .and_then(|op| op.when.as_ref())
-                .and_then(|when| when.last())
-                .cloned()
-        } else {
-            self.conditions
+        match opt {
+            ConditionOpt::ID(id) => {
+                let id = cmd::ResourceId::from(id);
+                self.operations
+                    .iter()
+                    .find(|op| {
+                        op.http
+                            .as_ref()
+                            .map(|http| {
+                                id.validate_pattern(&http.path, &http.request.method)
+                                    .is_ok()
+                            })
+                            .unwrap_or(false)
+                    })
+                    .and_then(|op| op.when.as_ref())
+                    .and_then(|when| when.last())
+                    .cloned()
+            }
+            ConditionOpt::Names(names) => self
+                .conditions
                 .as_ref()
                 .unwrap()
                 .iter()
-                .find(|&c| self.match_operator(&c.operator, matches))
-                .map(|c| c.var.clone())
+                .find(|&c| self.match_operator(&c.operator, &names))
+                .map(|c| c.var.clone()),
         }
     }
 
-    fn match_operator(&self, operator: &ConditionOperator, matches: &ArgMatches) -> bool {
+    fn match_operator(
+        &self,
+        operator: &ConditionOperator,
+        names: &HashMap<String, Option<String>>,
+    ) -> bool {
         match operator {
             ConditionOperator::Operators { operators, type_ } => match type_ {
                 ConditionOperatorType::Not | ConditionOperatorType::HasValue => unreachable!(
                     r#"operators' condition type can only be "and" or "or", got=%{type_:?}"#
                 ),
                 ConditionOperatorType::And => {
-                    operators.iter().all(|o| self.match_operator(o, matches))
+                    operators.iter().all(|o| self.match_operator(o, names))
                 }
                 ConditionOperatorType::Or => {
-                    operators.iter().any(|o| self.match_operator(o, matches))
+                    operators.iter().any(|o| self.match_operator(o, names))
                 }
             },
             ConditionOperator::Operator { operator, type_ } => match type_ {
-                ConditionOperatorType::Not => !self.match_operator(operator, matches),
+                ConditionOperatorType::Not => !self.match_operator(operator, names),
                 ConditionOperatorType::HasValue
                 | ConditionOperatorType::And
                 | ConditionOperatorType::Or => {
@@ -417,7 +499,7 @@ impl Command {
                 }
             },
             ConditionOperator::Arg { arg, type_ } => match type_ {
-                ConditionOperatorType::HasValue => matches.get_raw(arg).is_some(),
+                ConditionOperatorType::HasValue => names.get(arg).and_then(|v| v.clone()).is_some(),
                 ConditionOperatorType::Not
                 | ConditionOperatorType::And
                 | ConditionOperatorType::Or => unreachable!(

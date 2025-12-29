@@ -1,7 +1,7 @@
 use crate::{api::metadata_command::Method, cmd};
 
 use super::metadata_command::{Operation, Schema};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::ArgMatches;
 use core::unreachable;
 use std::collections::HashMap;
@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct OperationInvocation {
     operation: Operation,
     matches: ArgMatches,
+    id: Option<String>,
     body: Option<serde_json::Value>,
 }
 
@@ -16,11 +17,13 @@ impl OperationInvocation {
     pub fn new(
         operation: &Operation,
         matches: &ArgMatches,
+        id: &Option<String>,
         body: &Option<serde_json::Value>,
     ) -> Self {
         Self {
             operation: operation.clone(),
             matches: matches.clone(),
+            id: id.clone(),
             body: body.clone(),
         }
     }
@@ -38,15 +41,10 @@ impl OperationInvocation {
 
         let http = self.operation.http.as_ref().unwrap();
         let mut path;
-        // In case the "--id" is specified, we validate and use it.
-        if let Some(id) = self.matches.get_one::<String>(cmd::ID_OPTION) {
-            let id = if id == "-" {
-                cmd::ResourceId::from_stdin()?
-            } else {
-                cmd::ResourceId::from(id)
-            };
+        // In case the "id" is specified, we validate and use it.
+        if let Some(id) = self.id.as_ref() {
+            let id = cmd::ResourceId::from(id);
             id.validate_pattern(&http.path, &http.request.method)?;
-
             path = id.id();
             if http.request.method == Method::Post {
                 if let Some(last_seg) = http.path.split("/").last() {
@@ -133,7 +131,7 @@ impl<'a> BodyBuilder<'a> {
             let mut map = serde_json::Map::new();
             for prop in props {
                 if let Some(prop_name) = &prop.name {
-                    let value = self.build_value(prop)?;
+                    let value = self.build_value(prop).context("build body")?;
                     if let Some(value) = value {
                         map.insert(prop_name.clone(), value);
                     }
@@ -171,7 +169,9 @@ impl<'a> BodyBuilder<'a> {
                     let mut map = serde_json::Map::new();
                     for prop in props {
                         if let Some(prop_name) = &prop.name {
-                            let value = self.build_value(prop)?;
+                            let value = self
+                                .build_value(prop)
+                                .context(format!("build value for {}", prop_name))?;
                             if let Some(value) = value {
                                 map.insert(prop_name.clone(), value);
                             }
@@ -200,10 +200,19 @@ impl<'a> BodyBuilder<'a> {
                 }
             }
             _ => {
-                // The other types are all passed in its json form, hence can be directly decoded
+                // The other types are all passed in its json form, hence can be directly decoded.
                 if let Some(arg) = &schema.arg {
                     if let Some(value) = self.0.get_one::<String>(arg) {
-                        Ok(serde_json::from_str(value)?)
+                        // Since there exists string-like types (e.g. ResourceLocation) in the
+                        // metadata file. We have to firstly try to parse it as a non-string input.
+                        // If it failed, parse it as a JSON string.
+                        // TODO: Update the metadata file to eliminate bizzard string-like types like
+                        // "ResourceLocation", etc. Just use the primary types.
+                        if let Ok(v) = serde_json::from_str(value) {
+                            Ok(v)
+                        } else {
+                            Ok(Some(serde_json::Value::String(value.clone())))
+                        }
                     } else {
                         Ok(None)
                     }
