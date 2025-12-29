@@ -200,12 +200,19 @@ impl<'a> BodyBuilder<'a> {
                 }
             }
             _ => {
-                // The other types are all passed in its json form, hence can be directly decoded
-                // TODO: Update the metadata file to eliminate bizzard types like
-                // "ResourceLocation", etc. Just use the primary types.
+                // The other types are all passed in its json form, hence can be directly decoded.
                 if let Some(arg) = &schema.arg {
                     if let Some(value) = self.0.get_one::<String>(arg) {
-                        Ok(Some(serde_json::Value::String(value.clone())))
+                        // Since there exists string-like types (e.g. ResourceLocation) in the
+                        // metadata file. We have to firstly try to parse it as a non-string input.
+                        // If it failed, parse it as a JSON string.
+                        // TODO: Update the metadata file to eliminate bizzard string-like types like
+                        // "ResourceLocation", etc. Just use the primary types.
+                        if let Ok(v) = serde_json::from_str(value) {
+                            Ok(v)
+                        } else {
+                            Ok(Some(serde_json::Value::String(value.clone())))
+                        }
                     } else {
                         Ok(None)
                     }
