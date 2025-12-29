@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use azure_core::credentials::TokenCredential;
 use clap::ArgMatches;
 use metadata_index::Index;
@@ -32,15 +32,17 @@ pub struct ApiManager {
 }
 
 impl ApiManager {
-    pub async fn run<F>(
+    pub async fn run<CF, RF>(
         &self,
         subcommands: &Vec<String>,
         args: &CliInput,
         matches: &ArgMatches,
-        cred_func: F,
-    ) -> Result<String>
+        cred_func: CF,
+        mut resp_func: RF,
+    ) -> Result<()>
     where
-        F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+        CF: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+        RF: FnMut(String) -> (),
     {
         let cred = cred_func()?;
 
@@ -48,15 +50,14 @@ impl ApiManager {
         let command_file = self.index.locate_command_file(args)?;
         let cmd_metadata = self.read_command(&command_file)?;
 
+        // Read from stdin
         if matches.get_flag(STDIN_OPTION) {
-            // Read the id and (optionally, only for PUT) body from stdin, where each line shall be a JSON object containing
-            // the '.id' and other body attributes.
             let handle = io::stdin().lock();
-            let mut results = vec![];
             for line_result in handle.lines() {
                 let line = line_result?;
                 let mut obj: serde_json::Map<String, serde_json::Value> =
                     serde_json::from_str(&line)?;
+
                 let id = obj
                     .get("id")
                     .ok_or(anyhow!(r#""id" field not found"#))?
@@ -70,7 +71,7 @@ impl ApiManager {
                 let operation = cmd_metadata
                 .select_operation_by_cond(cmd_cond.as_ref())
                 .ok_or(anyhow!(
-                    "failed to select the operation out from multiple operations available for this command based on the input"
+                        "failed to select the operation out from multiple operations available for this command based on the input"
                 ))?;
 
                 let mut body = None;
@@ -105,7 +106,7 @@ impl ApiManager {
                     cli.extend(subcommands.iter().cloned());
                     cli.extend(args);
                     let result = cli.join(" ");
-                    results.push(result);
+                    resp_func(result);
                     continue;
                 }
 
@@ -117,10 +118,9 @@ impl ApiManager {
                     cred.clone(),
                     None,
                 )?;
-                let result = invoker.invoke(&client).await?;
-                results.push(result);
+                resp_func(invoker.invoke(&client).await?);
             }
-            return Ok(results.join("\n"));
+            return Ok(());
         }
 
         // Locate the operation (for metadata that contains multiple operations by conditions)
@@ -145,7 +145,6 @@ impl ApiManager {
             });
         let id_arg = matches.get_one::<String>(cmd::ID_OPTION).cloned();
         let condition_opt = ConditionOpt::new(id_arg, name_args);
-
         let cmd_cond = cmd_metadata.build_condition(condition_opt);
         let operation = cmd_metadata
                 .select_operation_by_cond(cmd_cond.as_ref())
@@ -196,7 +195,8 @@ impl ApiManager {
             let mut cli = vec![];
             cli.extend(subcommands.iter().cloned());
             cli.extend(args);
-            return Ok(cli.join(" "));
+            resp_func(cli.join(" "));
+            return Ok(());
         }
 
         // Invoke the operation
@@ -212,14 +212,15 @@ impl ApiManager {
             cred,
             None,
         )?;
-        invoker.invoke(&client).await
+        resp_func(invoker.invoke(&client).await?);
+        return Ok(());
     }
 }
 
 #[cfg(any(feature = "embed-api", target_arch = "wasm32"))]
 mod embedded {
     use super::metadata_command::Command;
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use std::path::PathBuf;
 
     use rust_embed::RustEmbed;

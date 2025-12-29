@@ -14,15 +14,19 @@ async fn main() -> Result<()> {
         Ok(cred)
     };
 
-    let res = run(
+    let result_func = |res: String| {
+        println!("{res}");
+    };
+
+    run(
         PathBuf::from_str("./metadata/metadata")?,
         env::args_os()
             .into_iter()
             .map(|s| s.into_string().unwrap())
             .collect(),
         cred_func,
+        result_func,
     )
     .await?;
-    println!("{res}");
     Ok(())
 }

@@ -18,9 +18,15 @@ pub mod lsp;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_exports;
 
-pub async fn run<F>(metadata_path: PathBuf, raw_input: Vec<String>, cred_func: F) -> Result<String>
+pub async fn run<CF, RF>(
+    metadata_path: PathBuf,
+    raw_input: Vec<String>,
+    cred_func: CF,
+    mut resp_func: RF,
+) -> Result<()>
 where
-    F: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+    CF: FnOnce() -> Result<Arc<dyn TokenCredential>>,
+    RF: FnMut(String) -> (),
 {
     tracing::info!("Running CLI with input: {:?}", raw_input);
     let matches = get_matches(cmd::cmd(), raw_input.clone())?;
@@ -29,7 +35,8 @@ where
         #[cfg(not(target_arch = "wasm32"))]
         Some(("lsp", _)) => {
             lsp::serve().await;
-            Ok("".to_string())
+            resp_func("".to_string());
+            return Ok(());
         }
 
         Some(("api", matches)) => {
@@ -53,8 +60,9 @@ where
             }
 
             api_manager
-                .run(&subcommands, &args, &matches, cred_func)
-                .await
+                .run(&subcommands, &args, &matches, cred_func, resp_func)
+                .await?;
+            return Ok(());
         }
         _ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
     }
